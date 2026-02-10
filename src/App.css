@@ -1,0 +1,65 @@
+
+
+
+/* ==================== RESPONSIVE ==================== */
+@media (max-width: 768px) {
+  .header {
+    padding: 0 16px;
+  }
+
+  .desktop-nav {
+    display: none;
+  }
+
+  .menu {
+    display: block;
+  }
+
+  .logo h1 {
+    font-size: 22px;
+  }
+
+  .logo img {
+    height: 45px;
+  }
+
+  .footer {
+    padding: 30px 20px 15px;
+  }
+
+  .footer-nav {
+    grid-template-columns: 1fr;
+    gap: 30px;
+    text-align: center;
+  }
+
+  .nav-section {
+    text-align: center;
+  }
+
+  .section-title {
+    display: block;
+    text-align: center;
+  }
+
+  .contact-item {
+    text-align: center;
+  }
+
+  .site-name {
+    font-size: 26px;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .nav-link {
+    color: #e8f1ff;
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.3);
+  }
+
+  .nav-link:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: #0f2f55;
+  }
+}
