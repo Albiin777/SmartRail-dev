@@ -1,5 +1,4 @@
 import { useEffect, useRef } from "react";
-import SeatLayout from "../pages/SeatLayout";
 
 function LabelNavbar({ hidden, setHidden }) {
 
@@ -80,7 +79,7 @@ function LabelNavbar({ hidden, setHidden }) {
           <span className="absolute left-0 -bottom-1 h-[2px] w-0 bg-[#2B2B2B] transition-all duration-300 group-hover:w-full"></span>
         </a>
 
-        <a href="#pnr-section" className={navItem}>
+        <a href="#pnr-section"className={navItem}>
           PNR Status
           <span className="absolute left-0 -bottom-1 h-[2px] w-0 bg-[#2B2B2B] transition-all duration-300 group-hover:w-full"></span>
         </a>
@@ -92,7 +91,7 @@ function LabelNavbar({ hidden, setHidden }) {
 
         <a className={navItem}>
           Seat Availability
-          <span href="SmartRail-dev\frontend\src\pages\SeatLayout.jsx" className="absolute left-0 -bottom-1 h-[2px] w-0 bg-[#2B2B2B] transition-all duration-300 group-hover:w-full"></span>
+          <span className="absolute left-0 -bottom-1 h-[2px] w-0 bg-[#2B2B2B] transition-all duration-300 group-hover:w-full"></span>
         </a>
 
         <a className={navItem}>

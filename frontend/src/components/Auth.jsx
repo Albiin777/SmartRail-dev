@@ -1,166 +1,247 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signInWithPopup,
-  signOut,
+  RecaptchaVerifier,
+  signInWithPhoneNumber,
 } from "firebase/auth";
-import { auth, googleProvider, appleProvider } from "../firebase";
+import { doc, setDoc } from "firebase/firestore";
+import { auth, googleProvider, db } from "../firebase";
 
 export default function Auth({ onClose }) {
+  const navigate = useNavigate();
+
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  const [otp, setOtp] = useState("");
+  const [confirmationResult, setConfirmationResult] = useState(null);
   const [isSignup, setIsSignup] = useState(false);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const isEmail = identifier.includes("@");
+  const isPhone = /^[0-9]{10}$/.test(identifier);
+
+  // ✅ Close button uses the passed prop
+  const handleClose = () => {
+    if (onClose) onClose();
+    else navigate("/");
+  };
 
   const handleAuth = async () => {
     try {
       setError("");
+      setLoading(true);
 
-      if (!isEmail) {
-        setError("Phone login via OTP coming soon 🚧");
+      // 🔥 PHONE OTP
+      if (isPhone) {
+        if (!window.recaptchaVerifier) {
+          window.recaptchaVerifier = new RecaptchaVerifier(
+            auth,
+            "recaptcha-container",
+            {
+              size: "invisible",
+            }
+          );
+        }
+
+        const appVerifier = window.recaptchaVerifier;
+
+        const result = await signInWithPhoneNumber(
+          auth,
+          "+91" + identifier,
+          appVerifier
+        );
+
+        setConfirmationResult(result);
+        setLoading(false);
         return;
       }
 
+      // 🔥 EMAIL SIGNUP
       if (isSignup) {
-        await createUserWithEmailAndPassword(auth, identifier, password);
+        const userCredential = await createUserWithEmailAndPassword(
+          auth,
+          identifier,
+          password
+        );
+
+        await setDoc(doc(db, "users", userCredential.user.uid), {
+          email: identifier,
+          provider: "email",
+          createdAt: new Date(),
+        });
       } else {
         await signInWithEmailAndPassword(auth, identifier, password);
       }
 
-      onClose(); // ✅ close after successful login
+      setLoading(false);
+      setLoading(false);
+      if (onClose) onClose();
+      else navigate("/");
     } catch (err) {
+      setLoading(false);
       setError(err.message);
     }
   };
 
-  const loginWithGoogle = async () => {
+  const verifyOtp = async () => {
+    try {
+      setLoading(true);
+
+      const result = await confirmationResult.confirm(otp);
+
+      await setDoc(
+        doc(db, "users", result.user.uid),
+        {
+          phone: result.user.phoneNumber,
+          provider: "phone",
+          createdAt: new Date(),
+        },
+        { merge: true }
+      );
+
+      setLoading(false);
+      setLoading(false);
+      if (onClose) onClose();
+      else navigate("/");
+    } catch (err) {
+      setLoading(false);
+      setError("Invalid OTP");
+    }
+  };
+
+  const socialLogin = async () => {
     try {
       setError("");
-      await signInWithPopup(auth, googleProvider);
-      onClose(); // ✅ close after success
-    } catch (err) {
-      setError(err.message);
-    }
-  };
+      setLoading(true);
 
-  const loginWithApple = async () => {
-    try {
-      setError("");
-      await signInWithPopup(auth, appleProvider);
-      onClose(); // ✅ close after success
-    } catch (err) {
-      setError(err.message);
-    }
-  };
+      const result = await signInWithPopup(auth, googleProvider);
 
-  const handleLogout = async () => {
-    const confirmLogout = window.confirm("Are you sure you want to log out?");
-    if (!confirmLogout) return;
-    await signOut(auth);
+      await setDoc(
+        doc(db, "users", result.user.uid),
+        {
+          email: result.user.email,
+          provider: "google",
+          createdAt: new Date(),
+        },
+        { merge: true }
+      );
+
+      setLoading(false);
+      setLoading(false);
+      if (onClose) onClose();
+      else navigate("/");
+    } catch (err) {
+      setLoading(false);
+
+      if (err.code !== "auth/popup-closed-by-user") {
+        setError(err.message);
+      }
+    }
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md px-4"
-      onClick={onClose} // click outside closes
-    >
-      <div
-        className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl px-8 py-10"
-        onClick={(e) => e.stopPropagation()} // prevent close when clicking inside
+    <div className="relative w-full max-w-md bg-white rounded-3xl p-8 shadow-xl flex flex-col gap-5">
+
+      {/* CLOSE BUTTON */}
+      <button
+        onClick={handleClose}
+        className="absolute top-4 right-5 text-gray-600 hover:text-black text-xl"
       >
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-black transition"
-        >
-          ✕
-        </button>
+        ✕
+      </button>
 
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h2 className="text-3xl font-bold text-gray-900">
-            {isSignup ? "Create your account" : "Welcome back"}
-          </h2>
-          <p className="text-gray-500 text-sm mt-2">
-            {isSignup
-              ? "Sign up to continue with SmartRail"
-              : "Login to continue your journey"}
-          </p>
-        </div>
+      <h2 className="text-2xl font-bold text-center text-black">
+        {isSignup ? "Create account" : "Welcome back"}
+      </h2>
 
-        {/* Social Buttons */}
-        <div className="space-y-3">
-          <button
-            onClick={loginWithGoogle}
-            className="w-full flex items-center justify-center gap-3 border rounded-xl py-3 font-medium text-gray-800 hover:bg-gray-50 transition"
-          >
-            Continue with Google
-          </button>
+      {/* GOOGLE BUTTON */}
+      <button
+        onClick={socialLogin}
+        disabled={loading}
+        className="w-full flex items-center justify-center gap-3 border rounded-xl py-3 text-black hover:bg-gray-100"
+      >
+        <svg className="w-5 h-5" viewBox="0 0 48 48">
+          <path fill="#EA4335" d="M24 9.5c3.54 0 6.69 1.22 9.19 3.61l6.86-6.86C35.64 2.39 30.21 0 24 0 14.82 0 6.73 5.64 2.69 13.76l7.99 6.2C12.47 13.43 17.73 9.5 24 9.5z" />
+          <path fill="#4285F4" d="M46.5 24.5c0-1.64-.15-3.21-.43-4.73H24v9.01h12.69c-.55 2.98-2.21 5.51-4.71 7.21l7.3 5.68C43.98 37.38 46.5 31.47 46.5 24.5z" />
+          <path fill="#FBBC05" d="M10.68 28.96A14.5 14.5 0 019.5 24c0-1.72.3-3.39.84-4.96l-7.99-6.2A23.96 23.96 0 000 24c0 3.84.92 7.47 2.69 10.76l7.99-6.2z" />
+          <path fill="#34A853" d="M24 48c6.21 0 11.64-2.05 15.52-5.58l-7.3-5.68c-2.03 1.36-4.64 2.16-8.22 2.16-6.27 0-11.53-3.93-13.32-9.46l-7.99 6.2C6.73 42.36 14.82 48 24 48z" />
+        </svg>
+        Continue with Google
+      </button>
 
-          <button
-            onClick={loginWithApple}
-            className="w-full flex items-center justify-center gap-3 border rounded-xl py-3 font-medium text-gray-800 hover:bg-gray-50 transition"
-          >
-            Continue with Apple
-          </button>
-        </div>
+      <div className="text-center text-sm text-gray-500">OR</div>
 
-        {/* Divider */}
-        <div className="flex items-center gap-3 my-6">
-          <div className="flex-1 h-px bg-gray-200"></div>
-          <span className="text-xs text-gray-400">OR</span>
-          <div className="flex-1 h-px bg-gray-200"></div>
-        </div>
+      <input
+        type="text"
+        placeholder="Email or Phone (10 digits)"
+        value={identifier}
+        onChange={(e) => setIdentifier(e.target.value)}
+        className="w-full bg-gray-200 rounded-xl px-4 py-3 text-black"
+      />
 
-        {/* Inputs */}
-        <div className="space-y-4">
-          <input
-            type="text"
-            placeholder="Email or phone number"
-            value={identifier}
-            onChange={(e) => setIdentifier(e.target.value)}
-            className="w-full border rounded-xl px-4 py-3 text-sm text-gray-900"
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full border rounded-xl px-4 py-3 text-sm text-gray-900"
-          />
-        </div>
+      {!isPhone && (
+        <input
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className="w-full bg-gray-200 rounded-xl px-4 py-3 text-black"
+        />
+      )}
 
-        {error && (
-          <p className="text-red-600 text-xs mt-3 text-center">{error}</p>
-        )}
+      {confirmationResult && (
+        <input
+          type="text"
+          placeholder="Enter OTP"
+          value={otp}
+          onChange={(e) => setOtp(e.target.value)}
+          className="w-full bg-gray-200 rounded-xl px-4 py-3 text-black"
+        />
+      )}
 
+      {error && (
+        <p className="text-red-600 text-sm text-center">{error}</p>
+      )}
+
+      {!confirmationResult ? (
         <button
           onClick={handleAuth}
-          className="w-full mt-6 bg-gradient-to-r from-black to-gray-800 text-white py-3 rounded-xl font-semibold hover:opacity-90 transition"
+          disabled={loading}
+          className="w-full bg-black text-white py-3 rounded-xl"
         >
-          {isSignup ? "Create Account" : "Login"}
+          {loading
+            ? "Please wait..."
+            : isPhone
+              ? "Send OTP"
+              : isSignup
+                ? "Create Account"
+                : "Login"}
         </button>
-
-        <p className="text-sm text-center text-gray-500 mt-5">
-          {isSignup ? "Already have an account?" : "New to SmartRail?"}{" "}
-          <button
-            onClick={() => setIsSignup(!isSignup)}
-            className="text-black font-semibold hover:underline"
-          >
-            {isSignup ? "Login" : "Create account"}
-          </button>
-        </p>
-
+      ) : (
         <button
-          onClick={handleLogout}
-          className="block mx-auto mt-4 text-xs text-red-500 hover:underline"
+          onClick={verifyOtp}
+          disabled={loading}
+          className="w-full bg-black text-white py-3 rounded-xl"
         >
-          Logout
+          {loading ? "Verifying..." : "Verify OTP"}
         </button>
-      </div>
+      )}
+
+      <p className="text-center text-sm text-gray-600">
+        {isSignup ? "Already have an account?" : "New here?"}
+        <button
+          onClick={() => setIsSignup(!isSignup)}
+          className="ml-2 font-bold text-black"
+        >
+          {isSignup ? "Login" : "Create account"}
+        </button>
+      </p>
+
+      <div id="recaptcha-container"></div>
     </div>
   );
 }

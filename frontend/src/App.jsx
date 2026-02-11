@@ -1,11 +1,15 @@
 import { useState, useEffect } from "react";
 import "./App.css";
+
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 import Hero from "./components/Hero";
 import BookingCard from "./components/Bookingcaard";
-import Pnrstatus from "./components/Pnrstatus";
+import Pnrstatus from "./components/Pnrstatus";   // ✅ CORRECT
 import Auth from "./components/Auth";
+
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import SeatLayout from "./pages/SeatLayout";
 
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./firebase";
@@ -138,7 +142,9 @@ export default function App() {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [searchMode, setSearchMode] = useState("route");
   const [hidden, setHidden] = useState(false);
+
   const [user, setUser] = useState(null);
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
 
   // Form States
   const [trainNameNumber, setTrainNameNumber] = useState("");
@@ -177,16 +183,21 @@ export default function App() {
   }, []);
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-900">
-      <Header />
-      <Auth />
+    <div className="min-h-screen flex flex-col bg-gray-900 relative">
+      <Header onLoginClick={() => setIsAuthOpen(true)} />
+
+      {isAuthOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <Auth onClose={() => setIsAuthOpen(false)} />
+        </div>
+      )}
 
       <div className="min-h-screen flex flex-col pt-[70px]">
         <main className="flex-grow">
           <Hero />
           <BookingCard />
 
-          <div id="pnr-section" className="scroll-mt-[90px]">
+          <div id="pnr-section" className="scroll-mt-[150px]">
             <Pnrstatus />
           </div>
         </main>
@@ -196,3 +207,4 @@ export default function App() {
     </div>
   );
 }
+

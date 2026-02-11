@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import LabelNavbar from "../labels/LabelNavbar";
+import Auth from "./Auth";
 
-function Header() {
+function Header({ onLoginClick }) {
   const [hidden, setHidden] = useState(false);
   const lastScrollY = useRef(0);
   const timeoutRef = useRef(null);
@@ -65,18 +66,17 @@ function Header() {
           </span>
         </div>
 
-        <a
-          href="/login"
+        <button
+          onClick={onLoginClick}
           className="
-            px-5 py-2 rounded-lg
-            border border-[#2B2B2B]
-            text-[#2B2B2B]
-            hover:bg-[#2B2B2B] hover:text-white
-            transition
-          "
-        >
+          px-5 py-2 rounded-lg
+          border border-[#2B2B2B]
+          text-[#2B2B2B]
+          hover:bg-[#2B2B2B] hover:text-white
+          transition
+          ">
           {user ? user.name : "Login"}
-        </a>
+        </button>
       </header>
 
       {/* LabelNavbar still receives the 'hidden' prop to handle its own animation */}

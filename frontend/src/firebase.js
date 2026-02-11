@@ -1,5 +1,6 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider, OAuthProvider } from "firebase/auth";
+import { getAuth, GoogleAuthProvider } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
 import { getAnalytics, isSupported } from "firebase/analytics";
 
 const firebaseConfig = {
@@ -13,14 +14,20 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
+
+// ✅ Authentication
 const auth = getAuth(app);
 
+// ✅ Firestore Database
+const db = getFirestore(app);
+
+// ✅ Google Provider
+const googleProvider = new GoogleAuthProvider();
+
+// ✅ Analytics (only if supported)
 let analytics;
 isSupported().then((yes) => {
   if (yes) analytics = getAnalytics(app);
 });
 
-const googleProvider = new GoogleAuthProvider();
-const appleProvider = new OAuthProvider("apple.com");
-
-export { app, auth, googleProvider, appleProvider };
+export { app, auth, db, googleProvider };
