@@ -1,11 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import LabelNavbar from "../labels/LabelNavbar";
 import Auth from "./Auth";
 
 function Header({ onLoginClick }) {
   const [hidden, setHidden] = useState(false);
-  const lastScrollY = useRef(0);
-  const timeoutRef = useRef(null);
+  
   const [user, setUser] = useState(null);
 
   useEffect(() => {
@@ -13,39 +12,7 @@ function Header({ onLoginClick }) {
     if (storedUser) setUser(JSON.parse(storedUser));
   }, []);
 
-  useEffect(() => {
-    const onScroll = () => {
-      const currentY = window.scrollY;
-      const diff = currentY - lastScrollY.current;
-
-      // Hide sub-navbar when scrolling down
-      if (diff > 10 && currentY > 150) {
-        if (!timeoutRef.current) {
-          timeoutRef.current = setTimeout(() => {
-            setHidden(true);
-            timeoutRef.current = null;
-          }, 250);
-        }
-      }
-
-      // Show sub-navbar when scrolling up
-      if (diff < -5) {
-        if (timeoutRef.current) {
-          clearTimeout(timeoutRef.current);
-          timeoutRef.current = null;
-        }
-        setHidden(false);
-      }
-
-      lastScrollY.current = currentY;
-    };
-
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    };
-  }, []);
+  // LabelNavbar handles scroll-based show/hide; no scroll listener here.
 
   return (
     <>
@@ -80,7 +47,7 @@ function Header({ onLoginClick }) {
       </header>
 
       {/* LabelNavbar still receives the 'hidden' prop to handle its own animation */}
-      <LabelNavbar hidden={hidden} />
+      <LabelNavbar hidden={hidden} setHidden={setHidden} />
     </>
   );
 }

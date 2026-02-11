@@ -1,6 +1,14 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 function LabelNavbar({ hidden, setHidden }) {
+  // If parent doesn't provide setHidden, manage local hidden state so
+  // the component still hides/shows when used standalone.
+  const [hiddenInternal, setHiddenInternal] = useState(false);
+  const hasExternal = typeof setHidden === "function";
+  const safeSetHidden = (val) => {
+    if (hasExternal) setHidden(val);
+    setHiddenInternal(val);
+  };
 
   const hasNotification = true;
   const lastScrollY = useRef(0);
@@ -10,25 +18,43 @@ function LabelNavbar({ hidden, setHidden }) {
     "relative group whitespace-nowrap text-sm font-medium text-[#2B2B2B] hover:text-black cursor-pointer px-1 transition-colors duration-200";
 
   useEffect(() => {
+    const shouldLog = (() => {
+      try {
+        return (window.__SCROLL_DEBUG__ === true) || (localStorage.getItem && localStorage.getItem('debugScrollLogs') === 'true');
+      } catch (e) {
+        return false;
+      }
+    })();
+
     const onScroll = () => {
       const currentY = window.scrollY;
       const diff = currentY - lastScrollY.current;
 
+      // scroll down: hide after short debounce
       if (diff > 10 && currentY > 150) {
         if (!timeoutRef.current) {
           timeoutRef.current = setTimeout(() => {
-            setHidden(true);
+            safeSetHidden(true);
+            if (shouldLog) {
+              // eslint-disable-next-line no-console
+              console.log('LabelNavbar:setHidden true', { currentY, diff });
+            }
             timeoutRef.current = null;
-          }, 250);
+          }, 200);
         }
       }
 
+      // scroll up: cancel debounce and show immediately
       if (diff < -5) {
         if (timeoutRef.current) {
           clearTimeout(timeoutRef.current);
           timeoutRef.current = null;
         }
-        setHidden(false);
+        safeSetHidden(false);
+        if (shouldLog) {
+          // eslint-disable-next-line no-console
+          console.log('LabelNavbar:setHidden false', { currentY, diff });
+        }
       }
 
       lastScrollY.current = currentY;
@@ -40,6 +66,8 @@ function LabelNavbar({ hidden, setHidden }) {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
   }, [setHidden]);
+
+  const effectiveHidden = hasExternal ? hidden : hiddenInternal;
 
   return (
     <nav
@@ -53,7 +81,7 @@ function LabelNavbar({ hidden, setHidden }) {
         bg-[#D4D4D4]
         border-b border-[#B3B3B3]
         transition-all duration-500 ease-out
-        ${hidden ? "-translate-y-6 opacity-0" : "translate-y-0 opacity-100"}
+        ${effectiveHidden ? "-translate-y-6 opacity-0" : "translate-y-0 opacity-100"}
       `}
     >
       <div
