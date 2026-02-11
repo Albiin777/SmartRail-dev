@@ -1,0 +1,198 @@
+import { useState, useEffect } from "react";
+import "./App.css";
+import Header from "./components/Header";
+import Footer from "./components/Footer";
+import Hero from "./components/Hero";
+import BookingCard from "./components/Bookingcaard";
+import Pnrstatus from "./components/Pnrstatus";
+import Auth from "./components/Auth";
+
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "./firebase";
+
+/* ==================== Icon Components ==================== */
+function SearchIcon({ size = 20, className = "" }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <circle cx="11" cy="11" r="8" />
+      <path d="m21 21-4.35-4.35" />
+    </svg>
+  );
+}
+
+const CalendarIcon = ({ size = 20, className = "" }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+    <line x1="16" y1="2" x2="16" y2="6" />
+    <line x1="8" y1="2" x2="8" y2="6" />
+    <line x1="3" y1="10" x2="21" y2="10" />
+  </svg>
+);
+
+const SwapIcon = ({ size = 20, className = "" }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <path d="M8 3L4 7l4 4" />
+    <path d="M4 7h16" />
+    <path d="m16 21 4-4-4-4" />
+    <path d="M20 17H4" />
+  </svg>
+);
+
+const TrainIcon = ({ size = 20, className = "" }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <rect x="4" y="3" width="16" height="16" rx="2" />
+    <path d="M4 11h16" />
+    <path d="M12 3v8" />
+    <path d="m8 19-2 3" />
+    <path d="m18 22-2-3" />
+    <path d="M8 15h0" />
+    <path d="M16 15h0" />
+  </svg>
+);
+
+const MapPinIcon = ({ size = 20, className = "" }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+    <circle cx="12" cy="10" r="3" />
+  </svg>
+);
+
+const UsersIcon = ({ size = 20, className = "" }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+  </svg>
+);
+
+/* ==================== Main App Component ==================== */
+export default function App() {
+  const [theme] = useState("dark");
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [searchMode, setSearchMode] = useState("route");
+  const [hidden, setHidden] = useState(false);
+  const [user, setUser] = useState(null);
+
+  // Form States
+  const [trainNameNumber, setTrainNameNumber] = useState("");
+  const [fromStation, setFromStation] = useState("");
+  const [toStation, setToStation] = useState("");
+  const [date, setDate] = useState("");
+  const [classType, setClassType] = useState("AC 3 Tier");
+  const [passengers, setPassengers] = useState("1");
+
+  const isDark = theme === "dark";
+
+  const swapStations = () => {
+    const temp = fromStation;
+    setFromStation(toStation);
+    setToStation(temp);
+  };
+
+  const handleSearch = () => {
+    setIsTransitioning(true);
+    setTimeout(() => setIsTransitioning(false), 700);
+    console.log("Searching...", {
+      searchMode,
+      trainNameNumber,
+      fromStation,
+      toStation,
+      date,
+      classType,
+      passengers,
+    });
+  };
+
+  // ✅ FIXED: useEffect is now imported
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (user) => setUser(user));
+    return () => unsub();
+  }, []);
+
+  return (
+    <div className="min-h-screen flex flex-col bg-gray-900">
+      <Header />
+      <Auth />
+
+      <div className="min-h-screen flex flex-col pt-[70px]">
+        <main className="flex-grow">
+          <Hero />
+          <BookingCard />
+
+          <div id="pnr-section" className="scroll-mt-[90px]">
+            <Pnrstatus />
+          </div>
+        </main>
+
+        <Footer />
+      </div>
+    </div>
+  );
+}
