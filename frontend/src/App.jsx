@@ -11,8 +11,7 @@ import Auth from "./components/Auth";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import SeatLayout from "./pages/SeatLayout";
 
-import { onAuthStateChanged } from "firebase/auth";
-import { auth } from "./firebase";
+import { supabase } from "./supabaseClient";
 
 /* ==================== Icon Components ==================== */
 function SearchIcon({ size = 20, className = "" }) {
@@ -176,10 +175,19 @@ export default function App() {
     });
   };
 
-  // ✅ FIXED: useEffect is now imported
+  // ✅ Supabase auth state listener
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (user) => setUser(user));
-    return () => unsub();
+    // Check for existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   // Persist scroll position in sessionStorage and restore on reload/back-navigation.
@@ -187,7 +195,7 @@ export default function App() {
     const saveScroll = () => {
       try {
         sessionStorage.setItem('sr:lastScroll', String(window.scrollY || 0));
-      } catch (e) {}
+      } catch (e) { }
     };
 
     const restoreScroll = () => {
@@ -205,7 +213,7 @@ export default function App() {
           // reload or fresh navigation: go to top / hero
           requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0 }));
         }
-      } catch (e) {}
+      } catch (e) { }
     };
 
     // Restore once on mount

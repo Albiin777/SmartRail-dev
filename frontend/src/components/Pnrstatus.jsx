@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import LabelNavbar from "../labels/LabelNavbar";
+import LabelNavbar from "./LabelNavbar";
 import PNRResult from "./Pnrresult";
 
 export default function PNRStatus() {
