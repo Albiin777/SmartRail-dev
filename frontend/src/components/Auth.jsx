@@ -1,98 +1,177 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "../supabaseClient";
+import { X, ArrowRight, Loader2, User, Calendar, Phone, Mail, CheckCircle2, Lock, Eye, EyeOff, Timer, ChevronDown } from "lucide-react";
 
 export default function Auth({ onClose }) {
-  const [mode, setMode] = useState("login"); // 'login' | 'signup'
-  const [authMethod, setAuthMethod] = useState("email"); // 'email' | 'phone'
+  // Mode: 'login' | 'signup'
+  const [mode, setMode] = useState("login");
 
-  // Form fields
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [password, setPassword] = useState("");
-  const [fullName, setFullName] = useState("");
-  const [otp, setOtp] = useState("");
+  // Steps: 'credentials' -> 'otp' -> 'profile'
+  const [step, setStep] = useState("credentials");
 
-  // UI states
-  const [showOtpInput, setShowOtpInput] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  // Data
+  const [identifier, setIdentifier] = useState(""); // Email or Phone
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [useOtpLogin, setUseOtpLogin] = useState(false); // Only for Login mode
 
-  // Lock body scroll when modal is open
+  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
+  const otpRefs = useRef([]);
+  const passwordInputRef = useRef(null);
+  const dateInputRef = useRef(null);
+
+  // Data
+  const [profile, setProfile] = useState({
+    fullName: "",
+    dob: "",
+    gender: "",
+    email: ""
+  });
+
+  const [emailVerificationState, setEmailVerificationState] = useState({
+    code: "",
+    sent: false,
+    verified: false,
+    loading: false
+  });
+
+  // Timer
+  const [timer, setTimer] = useState(30);
+  const [canResend, setCanResend] = useState(false);
+
+  // Lock body scroll
   useEffect(() => {
     document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = "auto";
-    };
+    return () => { document.body.style.overflow = "auto"; };
   }, []);
+
+  // Reset state when mode changes
+  useEffect(() => {
+    setStep("credentials");
+    setIdentifier("");
+    setPassword("");
+    setOtp(["", "", "", "", "", ""]);
+    setError("");
+    setSuccess("");
+    setUseOtpLogin(false);
+    setProfile({ fullName: "", dob: "", gender: "", email: "" });
+    setEmailVerificationState({ code: "", sent: false, verified: false, loading: false });
+  }, [mode]);
+
+  // Timer Countdown
+  useEffect(() => {
+    let interval;
+    if (step === 'otp' && timer > 0) {
+      interval = setInterval(() => {
+        setTimer((prev) => prev - 1);
+      }, 1000);
+    } else if (timer === 0) {
+      setCanResend(true);
+    }
+    return () => clearInterval(interval);
+  }, [step, timer]);
 
   const handleClose = () => {
     if (onClose) onClose();
   };
 
-  // Email Signup
-  const handleEmailSignup = async () => {
-    try {
-      setError("");
-      setSuccess("");
-      setLoading(true);
+  const handleOtpChange = (index, value) => {
+    if (isNaN(value)) return;
+    const newOtp = [...otp];
+    newOtp[index] = value;
+    setOtp(newOtp);
 
-      const response = await fetch(`${API_URL}/api/auth/signup-email`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, fullName })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Signup failed');
-      }
-
-      setSuccess("Verification email sent! Please check your inbox.");
-      setShowOtpInput(true);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+    // Focus next input
+    if (value && index < 5) {
+      otpRefs.current[index + 1].focus();
     }
   };
 
-  // Email Login
-  const handleEmailLogin = async () => {
-    try {
-      setError("");
-      setLoading(true);
+  const handleOtpKeyDown = (index, e) => {
+    if (e.key === "Backspace" && !otp[index] && index > 0) {
+      otpRefs.current[index - 1].focus();
+    }
+  };
 
-      const response = await fetch(`${API_URL}/api/auth/login-email`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+  const handlePaste = (e) => {
+    e.preventDefault();
+    const pastedData = e.clipboardData.getData("text").slice(0, 6).split("");
+    if (pastedData.length > 0) {
+      const newOtp = [...otp];
+      pastedData.forEach((val, i) => {
+        if (i < 6) newOtp[i] = val;
       });
+      setOtp(newOtp);
+      otpRefs.current[Math.min(pastedData.length, 5)].focus();
+    }
+  };
 
-      const data = await response.json();
+  // 1. Handle Credentials Submission
+  const handleCredentialsSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
 
-      if (!response.ok) {
-        // Show user-friendly error messages
-        if (data.error?.includes('Invalid login credentials')) {
-          throw new Error('Invalid email or password. Please try again.');
-        } else if (data.error?.includes('Email not confirmed')) {
-          throw new Error('Please verify your email first. Check your inbox for the OTP.');
+    try {
+      const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier);
+      const isMobile = /^[0-9]{10}$/.test(identifier);
+
+      if (mode === 'signup') {
+        if (!isMobile) throw new Error("Sign up is available with Mobile Number only.");
+        if (!password || password.length < 6) throw new Error("Password must be at least 6 characters.");
+      } else {
+        if (!isEmail && !isMobile) throw new Error("Please enter a valid Email or Mobile Number.");
+        if (!useOtpLogin && !password) throw new Error("Please enter your password.");
+      }
+
+      const isMobileDetected = isMobile;
+      const loginValue = isMobileDetected ? `+91${identifier}` : identifier;
+
+      if (mode === 'signup') {
+        // SIGNUP: Mobile/Email + Password -> Send OTP
+        const { error } = await supabase.auth.signUp({
+          [isMobileDetected ? 'phone' : 'email']: loginValue,
+          password: password,
+          options: {
+            // metadata will be updated in profile step
+          }
+        });
+
+        if (error) throw error;
+
+        // Setup for OTP verification
+        setStep("otp");
+        setTimer(30);
+        setCanResend(false);
+        setSuccess(`OTP sent to ${loginValue}`);
+
+      } else {
+        // LOGIN
+        if (useOtpLogin) {
+          // Login via OTP
+          const { error } = await supabase.auth.signInWithOtp({
+            [isMobileDetected ? 'phone' : 'email']: loginValue
+          });
+          if (error) throw error;
+          setStep("otp");
+          setTimer(30);
+          setCanResend(false);
+          setSuccess(`OTP sent to ${loginValue}`);
+        } else {
+          // Login via Password
+          const { data, error } = await supabase.auth.signInWithPassword({
+            [isMobileDetected ? 'phone' : 'email']: loginValue,
+            password: password
+          });
+          if (error) throw error;
+          finishAuth();
         }
-        throw new Error(data.error || 'Login failed');
       }
 
-      // Store token
-      localStorage.setItem('authToken', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
-
-      setSuccess("Login successful!");
-      setTimeout(() => {
-        handleClose();
-        window.location.reload(); // Refresh to update auth state
-      }, 1000);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -100,59 +179,93 @@ export default function Auth({ onClose }) {
     }
   };
 
-  // Phone Signup
-  const handlePhoneSignup = async () => {
-    try {
-      setError("");
-      setSuccess("");
-      setLoading(true);
+  // 2. Handle OTP Verification
+  const handleOtpVerify = async (e) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
 
-      const response = await fetch(`${API_URL}/api/auth/signup-phone`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: `+91${phone}`, password, fullName })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Signup failed');
-      }
-
-      setSuccess("OTP sent to your phone!");
-      setShowOtpInput(true);
-    } catch (err) {
-      setError(err.message);
-    } finally {
+    const otpValue = otp.join("");
+    if (otpValue.length !== 6) {
+      setError("Please enter a valid 6-digit OTP");
       setLoading(false);
+      return;
     }
-  };
 
-  // Phone Login (sends OTP)
-  const handlePhoneLogin = async () => {
     try {
-      setError("");
-      setSuccess("");
-      setLoading(true);
+      const isMobile = /^[0-9]{10}$/.test(identifier);
+      const loginValue = isMobile ? `+91${identifier}` : identifier;
+      const type = isMobile ? 'sms' : 'email';
 
-      const response = await fetch(`${API_URL}/api/auth/login-phone`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: `+91${phone}` })
+      const { data, error } = await supabase.auth.verifyOtp({
+        [isMobile ? 'phone' : 'email']: loginValue,
+        token: otpValue,
+        type: mode === 'signup' ? 'sms' : type // Signup is forced mobile
       });
 
-      const data = await response.json();
+      if (error) throw error;
 
-      if (!response.ok) {
-        // Show user-friendly error messages
-        if (data.error?.includes('User not found') || data.error?.includes('not registered')) {
-          throw new Error('This phone number is not registered. Please sign up first.');
+      const user = data.user;
+
+      // If Signup Mode -> Go to Profile
+      if (mode === 'signup') {
+        if (!user.user_metadata?.full_name || !user.user_metadata?.dob) {
+          setStep("profile");
+          setSuccess("Verified! please complete your profile.");
+          setLoading(false);
+          return;
         }
-        throw new Error(data.error || 'Failed to send OTP');
       }
 
-      setSuccess("OTP sent to your phone!");
-      setShowOtpInput(true);
+      // Login Mode or Completed Profile -> Finish
+      finishAuth();
+
+    } catch (err) {
+      // Improve error message for expired/invalid tokens
+      if (err.message && (err.message.includes("Token has expired") || err.message.includes("invalid"))) {
+        setError("The code is invalid or has expired. Please try resending.");
+      } else {
+        setError(err.message || "Invalid OTP");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (!canResend) return;
+    setLoading(true);
+    setError("");
+
+    try {
+      const isMobile = /^[0-9]{10}$/.test(identifier);
+      const loginValue = isMobile ? `+91${identifier}` : identifier;
+
+      let error = null;
+
+      if (mode === 'signup') {
+        const { error: resendError } = await supabase.auth.resend({
+          type: 'signup',
+          email: !isMobile ? loginValue : undefined,
+          phone: isMobile ? loginValue : undefined
+        });
+        error = resendError;
+      } else {
+        const { error: loginError } = await supabase.auth.signInWithOtp({
+          [isMobile ? 'phone' : 'email']: loginValue,
+          options: {
+            shouldCreateUser: false
+          }
+        });
+        error = loginError;
+      }
+
+      if (error) throw error;
+
+      setTimer(30);
+      setCanResend(false);
+      setSuccess("Code resent successfully!");
+
     } catch (err) {
       setError(err.message);
     } finally {
@@ -160,33 +273,109 @@ export default function Auth({ onClose }) {
     }
   };
 
-  // Verify Email OTP
-  const handleVerifyEmailOTP = async () => {
+  // Handle Verify Email Click
+  const handleVerifyEmail = async () => {
+    setError("");
+    setSuccess("");
+    setEmailVerificationState({ ...emailVerificationState, loading: true });
+
     try {
-      setError("");
-      setLoading(true);
-
-      const response = await fetch(`${API_URL}/api/auth/verify-email-otp`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, token: otp })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Verification failed');
+      if (!profile.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.email)) {
+        throw new Error("Please enter a valid email address.");
       }
 
-      // Store token
-      localStorage.setItem('authToken', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
+      // Trigger Email Change/Verification
+      const { error } = await supabase.auth.updateUser({ email: profile.email });
 
-      setSuccess("Email verified! Logging you in...");
-      setTimeout(() => {
-        handleClose();
-        window.location.reload();
-      }, 1000);
+      if (error) throw error;
+
+      setEmailVerificationState({
+        ...emailVerificationState,
+        sent: true,
+        loading: false
+      });
+      setSuccess(`Verification code sent to ${profile.email}`);
+
+    } catch (err) {
+      console.error("Supabase Email Verification Error:", err);
+      let msg = err.message;
+      if (msg.includes("Error sending email change email")) {
+        msg = "Unable to send verification code. Please check your email or try again.";
+      }
+      setError(msg);
+      setEmailVerificationState({ ...emailVerificationState, loading: false });
+    }
+  };
+
+  // Handle Confirm Email OTP
+  const handleConfirmEmailOtp = async () => {
+    setError("");
+    setSuccess("");
+    setEmailVerificationState({ ...emailVerificationState, loading: true });
+
+    try {
+      // Verify the Email Change OTP
+      const { error } = await supabase.auth.verifyOtp({
+        email: profile.email,
+        token: emailVerificationState.code,
+        type: 'email_change'
+      });
+
+      if (error) throw error;
+
+      setEmailVerificationState({
+        ...emailVerificationState,
+        verified: true,
+        loading: false,
+        sent: false // Hide OTP input
+      });
+      setSuccess("Email verified successfully!");
+
+    } catch (err) {
+      setError(err.message);
+      setEmailVerificationState({ ...emailVerificationState, loading: false });
+    }
+  };
+
+  const handleEditEmail = () => {
+    setEmailVerificationState({ ...emailVerificationState, sent: false, verified: false, code: "" });
+    setSuccess("");
+    setError("");
+  };
+
+  const handleResendEmailOtp = async () => {
+    // If the timer is up (or button is clickable), just call verify email again
+    // In Supabase, updateUser triggers a new verification email
+    await handleVerifyEmail();
+  };
+
+  // 3. Handle Profile Completion
+  const handleProfileSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    try {
+      if (!profile.fullName || !profile.dob || !profile.gender) {
+        throw new Error("Please fill in all fields.");
+      }
+
+      if (!emailVerificationState.verified) {
+        throw new Error("Please verify your email address.");
+      }
+
+      const { data, error } = await supabase.auth.updateUser({
+        data: {
+          full_name: profile.fullName,
+          dob: profile.dob,
+          gender: profile.gender
+        }
+      });
+
+      if (error) throw error;
+
+      finishAuth();
+
     } catch (err) {
       setError(err.message);
     } finally {
@@ -194,84 +383,20 @@ export default function Auth({ onClose }) {
     }
   };
 
-  // Verify Phone OTP
-  const handleVerifyPhoneOTP = async () => {
-    try {
-      setError("");
-      setLoading(true);
-
-      const response = await fetch(`${API_URL}/api/auth/verify-phone-otp`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: `+91${phone}`, token: otp })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Verification failed');
-      }
-
-      // Store token
-      localStorage.setItem('authToken', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
-
-      setSuccess("Phone verified! Logging you in...");
-      setTimeout(() => {
-        handleClose();
-        window.location.reload();
-      }, 1000);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Resend OTP
-  const handleResendOTP = async () => {
-    try {
-      setError("");
-      setSuccess("");
-      setLoading(true);
-
-      const response = await fetch(`${API_URL}/api/auth/resend-otp`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: authMethod,
-          email: authMethod === 'email' ? email : undefined,
-          phone: authMethod === 'phone' ? `+91${phone}` : undefined
-        })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to resend OTP');
-      }
-
-      setSuccess("OTP resent successfully!");
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+  const finishAuth = () => {
+    setSuccess("Welcome to SmartRail!");
+    // Close modal immediately. App.jsx handles auth state reactively.
+    handleClose();
   };
 
   // Google Sign In
   const handleGoogleSignIn = async () => {
     try {
-      setError("");
       setLoading(true);
-
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`
-        }
+        options: { redirectTo: `${window.location.origin}/auth/callback` }
       });
-
       if (error) throw error;
     } catch (err) {
       setError(err.message);
@@ -279,212 +404,384 @@ export default function Auth({ onClose }) {
     }
   };
 
-  const handleSubmit = () => {
-    if (showOtpInput) {
-      // Verify OTP
-      if (authMethod === 'email') {
-        handleVerifyEmailOTP();
-      } else {
-        handleVerifyPhoneOTP();
-      }
-    } else {
-      // Initial auth action
-      if (mode === 'signup') {
-        if (authMethod === 'email') {
-          handleEmailSignup();
-        } else {
-          handlePhoneSignup();
-        }
-      } else {
-        if (authMethod === 'email') {
-          handleEmailLogin();
-        } else {
-          handlePhoneLogin();
-        }
-      }
-    }
-  };
-
-  // Handle form submission
-  const handleFormSubmit = (e) => {
-    e.preventDefault();
-    if (!loading) {
-      handleSubmit();
-    }
-  };
-
   return (
-    <div className="relative w-full max-w-md bg-white rounded-3xl p-8 shadow-xl flex flex-col gap-5">
-      {/* CLOSE BUTTON */}
-      <button
-        onClick={handleClose}
-        className="absolute top-4 right-5 text-gray-600 hover:text-black text-xl"
-      >
-        ✕
-      </button>
+    <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-200">
 
-      <h2 className="text-2xl font-bold text-center text-black">
-        {mode === "signup" ? "Create account" : "Welcome back"}
-      </h2>
+      {/* Close Button - Fixed relative to the card */}
+      <div className="absolute top-0 right-0 p-5 z-20">
+        <button onClick={handleClose} className="p-2 bg-white/80 hover:bg-gray-100 rounded-full transition-colors backdrop-blur-sm">
+          <X className="w-5 h-5 text-gray-500" />
+        </button>
+      </div>
 
-      <p className="text-center text-gray-500 text-sm -mt-3 mb-2">
-        {mode === "signup"
-          ? "Start your journey with us today."
-          : "Please enter your details to sign in."}
-      </p>
+      {/* Scrollable Content Area */}
+      <div className="overflow-y-auto p-6 sm:p-8 scrollbar-hide">
 
-      {/* GOOGLE BUTTON */}
-      <button
-        onClick={handleGoogleSignIn}
-        disabled={loading}
-        className="w-full flex items-center justify-center gap-3 border rounded-xl py-3 text-black hover:bg-gray-100 disabled:opacity-50"
-      >
-        <svg className="w-5 h-5" viewBox="0 0 48 48">
-          <path fill="#EA4335" d="M24 9.5c3.54 0 6.69 1.22 9.19 3.61l6.86-6.86C35.64 2.39 30.21 0 24 0 14.82 0 6.73 5.64 2.69 13.76l7.99 6.2C12.47 13.43 17.73 9.5 24 9.5z" />
-          <path fill="#4285F4" d="M46.5 24.5c0-1.64-.15-3.21-.43-4.73H24v9.01h12.69c-.55 2.98-2.21 5.51-4.71 7.21l7.3 5.68C43.98 37.38 46.5 31.47 46.5 24.5z" />
-          <path fill="#FBBC05" d="M10.68 28.96A14.5 14.5 0 019.5 24c0-1.72.3-3.39.84-4.96l-7.99-6.2A23.96 23.96 0 000 24c0 3.84.92 7.47 2.69 10.76l7.99-6.2z" />
-          <path fill="#34A853" d="M24 48c6.21 0 11.64-2.05 15.52-5.58l-7.3-5.68c-2.03 1.36-4.64 2.16-8.22 2.16-6.27 0-11.53-3.93-13.32-9.46l-7.99 6.2C6.73 42.36 14.82 48 24 48z" />
-        </svg>
-        Continue with Google
-      </button>
+        {/* Header Text */}
+        <div className="text-center space-y-1 mt-2 pb-4">
+          <h2 className="text-2xl font-black uppercase tracking-tight text-[#2B2B2B]">
+            {step === 'profile' ? 'Finish Setup' : mode === 'login' ? 'Welcome Back' : 'Create Account'}
+          </h2>
+          <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
+            {step === 'credentials' && (mode === 'login' ? "Login to continue" : "Start your journey")}
+            {step === 'otp' && "Verify your identity"}
+            {step === 'profile' && "Tell us a bit about yourself"}
+          </p>
+        </div>
 
-      <div className="text-center text-sm text-gray-500">OR</div>
-
-      {/* AUTH FORM */}
-      <form onSubmit={handleFormSubmit} className="flex flex-col gap-5">
-        {/* AUTH METHOD TOGGLE */}
-        {!showOtpInput && (
-          <div className="flex gap-2 bg-gray-100 p-1 rounded-xl">
-            <button
-              type="button"
-              onClick={() => setAuthMethod('email')}
-              className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${authMethod === 'email' ? 'bg-[#2B2B2B] text-white' : 'text-gray-600'
-                }`}
-            >
-              Email
-            </button>
-            <button
-              type="button"
-              onClick={() => setAuthMethod('phone')}
-              className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${authMethod === 'phone' ? 'bg-[#2B2B2B] text-white' : 'text-gray-600'
-                }`}
-            >
-              Phone
-            </button>
+        {/* ERROR / SUCCESS */}
+        {error && (
+          <div className="p-3 bg-red-50 text-red-600 text-xs font-bold uppercase tracking-wider rounded-xl text-center">
+            {error}
+          </div>
+        )}
+        {success && !error && (
+          <div className="p-3 bg-green-50 text-green-600 text-xs font-bold uppercase tracking-wider rounded-xl text-center flex items-center justify-center gap-2">
+            <CheckCircle2 className="w-4 h-4" /> {success}
           </div>
         )}
 
-        {/* FORM INPUTS */}
-        {!showOtpInput && (
-          <>
-            {mode === 'signup' && (
-              <input
-                type="text"
-                placeholder="Full Name"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                className="w-full bg-gray-200 rounded-xl px-4 py-3 text-black outline-none focus:ring-2 focus:ring-black"
-              />
-            )}
+        {/* STEP 1: CREDENTIALS (Identifier + Password) */}
+        {step === 'credentials' && (
+          <form onSubmit={handleCredentialsSubmit} className="flex flex-col gap-4">
+            <div className="space-y-4">
 
-            {authMethod === 'email' ? (
-              <input
-                type="email"
-                placeholder="Email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-gray-200 rounded-xl px-4 py-3 text-black outline-none focus:ring-2 focus:ring-black"
-              />
-            ) : (
-              <div className="flex gap-2">
-                <div className="bg-gray-200 rounded-xl px-4 py-3 text-black font-medium">
-                  +91
+              {/* Show Google only on Login */}
+              {mode === 'login' && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleGoogleSignIn}
+                    className="w-full flex items-center justify-center gap-3 py-3.5 border-2 border-gray-100 rounded-xl hover:bg-gray-50 transition-colors group"
+                  >
+                    <svg className="w-5 h-5 group-hover:scale-110 transition-transform" viewBox="0 0 48 48">
+                      <path fill="#EA4335" d="M24 9.5c3.54 0 6.69 1.22 9.19 3.61l6.86-6.86C35.64 2.39 30.21 0 24 0 14.82 0 6.73 5.64 2.69 13.76l7.99 6.2C12.47 13.43 17.73 9.5 24 9.5z" />
+                      <path fill="#4285F4" d="M46.5 24.5c0-1.64-.15-3.21-.43-4.73H24v9.01h12.69c-.55 2.98-2.21 5.51-4.71 7.21l7.3 5.68C43.98 37.38 46.5 31.47 46.5 24.5z" />
+                      <path fill="#FBBC05" d="M10.68 28.96A14.5 14.5 0 019.5 24c0-1.72.3-3.39.84-4.96l-7.99-6.2A23.96 23.96 0 000 24c0 3.84.92 7.47 2.69 10.76l7.99-6.2z" />
+                      <path fill="#34A853" d="M24 48c6.21 0 11.64-2.05 15.52-5.58l-7.3-5.68c-2.03 1.36-4.64 2.16-8.22 2.16-6.27 0-11.53-3.93-13.32-9.46l-7.99 6.2C6.73 42.36 14.82 48 24 48z" />
+                    </svg>
+                    <span className="text-xs font-bold text-[#2B2B2B] uppercase tracking-wider">Continue with Google</span>
+                  </button>
+
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-gray-200"></span></div>
+                    <div className="relative flex justify-center text-[10px] uppercase"><span className="bg-white px-2 text-gray-400 font-bold tracking-widest">Or login with</span></div>
+                  </div>
+                </>
+              )}
+
+              <div className="space-y-3">
+                {/* Identifier Input */}
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    {/^[0-9]+$/.test(identifier) ? <Phone className="w-5 h-5 text-gray-400" /> : <Mail className="w-5 h-5 text-gray-400" />}
+                  </div>
+                  <input
+                    type="text"
+                    value={identifier}
+                    onChange={(e) => setIdentifier(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const shouldSubmit = (
+                          (mode === 'login' && (useOtpLogin || password)) ||
+                          (mode === 'signup' && password)
+                        );
+                        if (shouldSubmit) {
+                          handleCredentialsSubmit(e);
+                        } else {
+                          passwordInputRef.current?.focus();
+                        }
+                      }
+                    }}
+                    placeholder={mode === 'login' ? "Email or Mobile" : "Mobile Number"}
+                    className="w-full pl-12 pr-4 py-4 bg-gray-50 border-2 border-transparent focus:border-[#2B2B2B] focus:bg-white rounded-xl outline-none transition-all font-medium text-[#2B2B2B] placeholder:text-gray-400"
+                    autoFocus
+                  />
                 </div>
+
+                {/* Password Input (Hidden if using OTP login) */}
+                {!useOtpLogin && (
+                  <div className="relative group animate-in fade-in slide-in-from-top-2">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <Lock className="w-5 h-5 text-gray-400" />
+                    </div>
+                    <input
+                      ref={passwordInputRef}
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Password"
+                      className="w-full pl-12 pr-12 py-4 bg-gray-50 border-2 border-transparent focus:border-[#2B2B2B] focus:bg-white rounded-xl outline-none transition-all font-medium text-[#2B2B2B] placeholder:text-gray-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600"
+                    >
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Login Options */}
+              {mode === 'login' && (
+                <div className="flex justify-between items-center px-1">
+                  <button
+                    type="button"
+                    onClick={() => setUseOtpLogin(!useOtpLogin)}
+                    className="text-[10px] font-bold text-[#2B2B2B] hover:underline uppercase tracking-wide"
+                  >
+                    {useOtpLogin ? "Use Password" : "Login via OTP"}
+                  </button>
+                  <button type="button" className="text-[10px] font-bold text-gray-400 hover:text-[#2B2B2B] uppercase tracking-wide">
+                    Forgot Password?
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <button
+              disabled={loading || !identifier || (!useOtpLogin && !password && mode === 'login') || (mode === 'signup' && !password)}
+              className="mt-2 w-full bg-[#2B2B2B] text-white py-4 rounded-xl font-black uppercase tracking-widest hover:bg-black transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-black/10"
+            >
+              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <>{mode === 'login' ? (useOtpLogin ? 'Get OTP' : 'Sign In') : 'Sign Up'} <ArrowRight className="w-5 h-5" /></>}
+            </button>
+
+            {/* Footer Toggle */}
+            <div className="text-center mt-2">
+              <p className="text-xs text-gray-500 font-medium">
+                {mode === 'login' ? "Don't have an account?" : "Already have an account?"}
+                <button
+                  type="button"
+                  onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}
+                  className="ml-1.5 font-bold text-[#2B2B2B] hover:underline"
+                >
+                  {mode === 'login' ? "Sign Up" : "Sign In"}
+                </button>
+              </p>
+            </div>
+          </form>
+        )}
+
+        {/* STEP 2: OTP */}
+        {step === 'otp' && (
+          <form onSubmit={handleOtpVerify} className="flex flex-col gap-6">
+            <div className="text-center">
+              <p className="text-sm text-gray-600">
+                Enter the code sent to <br />
+                <span className="font-bold text-[#2B2B2B]">{(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier)) ? `+91 ${identifier}` : identifier}</span>
+              </p>
+              <button
+                type="button"
+                onClick={() => { setStep('credentials'); setError(''); }}
+                className="text-[10px] text-blue-600 font-bold mt-2 hover:underline uppercase tracking-widest"
+              >
+                Change {(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier)) ? 'Number' : 'Email'}
+              </button>
+            </div>
+
+            {/* 6 SPLIT INPUTS */}
+            <div className="flex justify-between gap-1 sm:gap-2">
+              {otp.map((digit, index) => (
                 <input
-                  type="tel"
-                  placeholder="Phone (10 digits)"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                  className="flex-1 bg-gray-200 rounded-xl px-4 py-3 text-black outline-none focus:ring-2 focus:ring-black"
+                  key={index}
+                  ref={(el) => (otpRefs.current[index] = el)}
+                  type="text"
+                  value={digit}
+                  onChange={(e) => handleOtpChange(index, e.target.value)}
+                  onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                  onPaste={handlePaste}
+                  maxLength={1}
+                  className="w-10 h-14 sm:w-12 sm:h-16 text-center text-2xl font-bold bg-transparent border-b-2 border-gray-300 focus:border-[#2B2B2B] outline-none transition-colors text-[#2B2B2B]"
+                  autoFocus={index === 0}
+                />
+              ))}
+            </div>
+
+            <div className="space-y-3">
+              <button
+                disabled={loading || otp.join("").length !== 6}
+                className="w-full bg-[#2B2B2B] text-white py-4 rounded-xl font-black uppercase tracking-widest hover:bg-black transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Verify & Proceed"}
+              </button>
+
+              <div className="text-center">
+                {canResend ? (
+                  <button
+                    type="button"
+                    onClick={handleResendOtp}
+                    disabled={loading}
+                    className="text-xs font-bold text-gray-500 hover:text-black uppercase tracking-widest transition-colors"
+                  >
+                    Resend OTP
+                  </button>
+                ) : (
+                  <p className="text-xs font-bold text-gray-300 uppercase tracking-widest flex items-center justify-center gap-2">
+                    <Timer className="w-3 h-3" /> Resend in {timer}s
+                  </p>
+                )}
+              </div>
+            </div>
+          </form>
+        )}
+
+        {/* STEP 3: PROFILE COMPLETION (Signup Only) */}
+        {step === 'profile' && (
+          <form onSubmit={handleProfileSubmit} className="flex flex-col gap-4">
+            <div className="bg-gray-100 border border-gray-200 p-4 rounded-xl mb-2">
+              <p className="text-xs text-gray-800 font-bold flex items-center gap-2">
+                <User className="w-4 h-4" /> Almost There!
+              </p>
+              <p className="text-[10px] text-gray-600 mt-1">
+                Complete your profile and verify your email to finish.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">Full Name</label>
+                <input
+                  type="text"
+                  value={profile.fullName}
+                  onChange={(e) => setProfile({ ...profile, fullName: e.target.value })}
+                  placeholder="e.g. Aditi Sharma"
+                  className="w-full px-4 py-3 bg-gray-50 border-2 border-transparent focus:border-[#2B2B2B] rounded-xl outline-none font-medium text-[#2B2B2B]"
                 />
               </div>
-            )}
 
-            {(mode === 'signup' || authMethod === 'email') && (
-              <input
-                type="password"
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-gray-200 rounded-xl px-4 py-3 text-black outline-none focus:ring-2 focus:ring-black"
-              />
-            )}
-          </>
-        )}
+              {/* Email Verification Section */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">Email Address</label>
+                <div className="flex flex-col sm:flex-row gap-2 min-w-0 items-stretch">
+                  <input
+                    type="email"
+                    value={profile.email}
+                    disabled={emailVerificationState.verified}
+                    onChange={(e) => {
+                      if (emailVerificationState.sent) {
+                        setEmailVerificationState({ ...emailVerificationState, sent: false, code: "" });
+                      }
+                      setProfile({ ...profile, email: e.target.value });
+                    }}
+                    placeholder="john@example.com"
+                    className={`flex-1 min-w-0 px-4 py-3 bg-gray-50 border-2 border-transparent focus:border-[#2B2B2B] rounded-xl outline-none font-medium text-[#2B2B2B] ${emailVerificationState.verified ? 'text-green-600 bg-green-50' : ''}`}
+                  />
+                  {!emailVerificationState.verified && (
+                    <>
+                      {emailVerificationState.sent ? (
+                        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto flex-none">
+                          <button
+                            type="button"
+                            onClick={handleEditEmail}
+                            className="px-4 py-3 bg-gray-200 text-gray-700 text-xs font-bold uppercase tracking-wider rounded-xl hover:bg-gray-300 disabled:opacity-50 w-full sm:w-auto"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleResendEmailOtp}
+                            disabled={emailVerificationState.loading}
+                            className="px-4 py-3 bg-black text-white text-xs font-bold uppercase tracking-wider rounded-xl hover:bg-gray-800 disabled:opacity-50 w-full sm:w-auto"
+                          >
+                            Resend Code
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={handleVerifyEmail}
+                          disabled={emailVerificationState.loading || !profile.email}
+                          className="px-4 py-3 bg-black text-white text-xs font-bold uppercase tracking-wider rounded-xl hover:bg-gray-800 disabled:opacity-50 w-full sm:w-auto"
+                        >
+                          {emailVerificationState.loading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Verify"}
+                        </button>
+                      )}
+                    </>
+                  )}
+                  {emailVerificationState.verified && (
+                    <div className="flex items-center justify-center px-4 py-3 bg-green-100 text-green-700 rounded-xl">
+                      <CheckCircle2 className="w-5 h-5" />
+                    </div>
+                  )}
+                </div>
+              </div>
 
-        {/* OTP INPUT */}
-        {showOtpInput && (
-          <div className="space-y-3">
-            <input
-              type="text"
-              placeholder="Enter 6-digit OTP"
-              value={otp}
-              onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              className="w-full bg-gray-200 rounded-xl px-4 py-3 text-black text-center text-lg tracking-widest outline-none focus:ring-2 focus:ring-black"
-              maxLength={6}
-            />
+              {/* Email OTP Input */}
+              {emailVerificationState.sent && !emailVerificationState.verified && (
+                <div className="animate-in fade-in slide-in-from-top-2 space-y-2 bg-blue-50 p-4 rounded-xl border border-blue-100">
+                  <p className="text-xs text-blue-800 font-medium">Enter code sent to {profile.email}:</p>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      value={emailVerificationState.code}
+                      onChange={(e) => setEmailVerificationState({ ...emailVerificationState, code: e.target.value })}
+                      placeholder="123456"
+                      maxLength={6}
+                      className="flex-1 min-w-0 px-4 py-3 text-center text-lg font-bold tracking-widest text-[#2B2B2B] bg-white border border-blue-200 rounded-lg focus:outline-none focus:border-blue-500 placeholder:text-gray-300"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleConfirmEmailOtp}
+                      disabled={emailVerificationState.loading || emailVerificationState.code.length !== 6}
+                      className="px-4 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 disabled:opacity-50 w-full sm:w-auto"
+                    >
+                      {emailVerificationState.loading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Confirm"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">Date of Birth</label>
+                  <div
+                    className="relative cursor-pointer group"
+                    onClick={() => dateInputRef.current?.showPicker()}
+                  >
+                    <Calendar className="absolute left-3 top-3 w-4 h-4 text-gray-400 group-hover:text-[#2B2B2B] transition-colors pointer-events-none" />
+                    <input
+                      ref={dateInputRef}
+                      type="date"
+                      value={profile.dob}
+                      onChange={(e) => setProfile({ ...profile, dob: e.target.value })}
+                      className="w-full pl-10 pr-4 py-3 bg-gray-50 border-2 border-transparent focus:border-[#2B2B2B] focus:bg-white rounded-xl outline-none font-medium text-sm text-[#2B2B2B] transition-all duration-200 cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">Gender</label>
+                  <div className="relative group">
+                    <select
+                      value={profile.gender}
+                      onChange={(e) => setProfile({ ...profile, gender: e.target.value })}
+                      className={`w-full px-4 py-3 bg-gray-50 border-2 border-transparent focus:border-[#2B2B2B] focus:bg-white rounded-xl outline-none font-medium appearance-none transition-all duration-200 cursor-pointer ${profile.gender ? 'text-[#2B2B2B]' : 'text-gray-400'}`}
+                    >
+                      <option value="" disabled>Select Gender</option>
+                      <option value="male">Male</option>
+                      <option value="female">Female</option>
+                      <option value="other">Other</option>
+                    </select>
+                    <ChevronDown className="absolute right-4 top-3.5 w-5 h-5 text-gray-400 group-hover:text-[#2B2B2B] transition-colors pointer-events-none" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <button
-              onClick={handleResendOTP}
-              disabled={loading}
-              className="w-full text-sm text-gray-600 hover:text-black disabled:opacity-50"
+              disabled={loading || !emailVerificationState.verified}
+              className="mt-4 w-full bg-[#2B2B2B] text-white py-4 rounded-xl font-black uppercase tracking-widest hover:bg-black transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Resend OTP
+              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Complete Registration"}
             </button>
-          </div>
+          </form>
         )}
 
-        {/* ERROR/SUCCESS MESSAGES */}
-        {error && (
-          <p className="text-red-600 text-sm text-center bg-red-50 py-2 rounded-lg">
-            {error}
-          </p>
-        )}
-        {success && (
-          <p className="text-green-600 text-sm text-center bg-green-50 py-2 rounded-lg">
-            {success}
-          </p>
-        )}
-
-        {/* SUBMIT BUTTON */}
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full bg-black text-white py-3 rounded-xl font-semibold hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition"
-        >
-          {loading
-            ? "Please wait..."
-            : showOtpInput
-              ? "Verify OTP"
-              : mode === "signup"
-                ? "Create Account"
-                : authMethod === "phone"
-                  ? "Send OTP"
-                  : "Login"}
-        </button>
-      </form>
-
-      {/* TOGGLE MODE */}
-      {!showOtpInput && (
-        <p className="text-center text-sm text-gray-600">
-          {mode === "signup" ? "Already have an account?" : "New here?"}
-          <button
-            onClick={() => setMode(mode === "signup" ? "login" : "signup")}
-            className="ml-2 font-bold text-black hover:underline"
-          >
-            {mode === "signup" ? "Login" : "Create account"}
-          </button>
-        </p>
-      )}
+      </div>
     </div>
   );
 }

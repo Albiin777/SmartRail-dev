@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 
 function LabelNavbar({ hidden, setHidden }) {
   // If parent doesn't provide setHidden, manage local hidden state so
@@ -68,6 +69,21 @@ function LabelNavbar({ hidden, setHidden }) {
   }, [setHidden]);
 
   const effectiveHidden = hasExternal ? hidden : hiddenInternal;
+  const navigate = useNavigate();
+
+  const goToPnrSection = (e) => {
+    e.preventDefault();
+    if (window.location.pathname !== "/") {
+      navigate("/");
+      setTimeout(() => {
+        const el = document.getElementById("pnr-section");
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 80);
+    } else {
+      const el = document.getElementById("pnr-section");
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
 
   return (
     <nav
@@ -107,30 +123,51 @@ function LabelNavbar({ hidden, setHidden }) {
           <span className="absolute left-0 -bottom-1 h-[2px] w-0 bg-[#2B2B2B] transition-all duration-300 group-hover:w-full"></span>
         </a>
 
-        <a href="#pnr-section"className={navItem}>
+        <button onClick={goToPnrSection} className={navItem}>
           PNR Status
           <span className="absolute left-0 -bottom-1 h-[2px] w-0 bg-[#2B2B2B] transition-all duration-300 group-hover:w-full"></span>
-        </a>
+        </button>
 
-        <a className={navItem}>
+        <Link to="/" className={navItem}>
           Booking History
           <span className="absolute left-0 -bottom-1 h-[2px] w-0 bg-[#2B2B2B] transition-all duration-300 group-hover:w-full"></span>
-        </a>
+        </Link>
 
-        <a className={navItem}>
+        <Link to="/seat-layout" className={navItem}>
           Seat Availability
           <span className="absolute left-0 -bottom-1 h-[2px] w-0 bg-[#2B2B2B] transition-all duration-300 group-hover:w-full"></span>
-        </a>
+        </Link>
 
-        <a className={navItem}>
+        <Link to="/" className={navItem}>
           About Us
           <span className="absolute left-0 -bottom-1 h-[2px] w-0 bg-[#2B2B2B] transition-all duration-300 group-hover:w-full"></span>
-        </a>
+        </Link>
 
-        <a className={navItem}>
+        <button onClick={(e) => {
+          e.preventDefault();
+          const el = document.getElementById("support-section");
+          if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+        }} className={navItem}>
           Support
           <span className="absolute left-0 -bottom-1 h-[2px] w-0 bg-[#2B2B2B] transition-all duration-300 group-hover:w-full"></span>
-        </a>
+        </button>
+
+        <button onClick={(e) => {
+          e.preventDefault();
+          if (window.location.pathname !== "/") {
+            navigate("/");
+            setTimeout(() => {
+              const el = document.getElementById("reviews-section");
+              if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+            }, 80);
+          } else {
+            const el = document.getElementById("reviews-section");
+            if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+          }
+        }} className={navItem}>
+          Reviews Hub
+          <span className="absolute left-0 -bottom-1 h-[2px] w-0 bg-[#2B2B2B] transition-all duration-300 group-hover:w-full"></span>
+        </button>
 
       </div>
     </nav>

@@ -7,8 +7,10 @@ import Hero from "./components/Hero";
 import BookingCard from "./components/Bookingcaard";
 import Pnrstatus from "./components/Pnrstatus";   // ✅ CORRECT
 import Auth from "./components/Auth";
+import Support from "./pages/Support";
+import Reviews from "./components/Reviews";
 
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, useNavigate } from "react-router-dom";
 import SeatLayout from "./pages/SeatLayout";
 
 import { supabase } from "./supabaseClient";
@@ -154,6 +156,7 @@ export default function App() {
   const [passengers, setPassengers] = useState("1");
 
   const isDark = theme === "dark";
+  const navigate = useNavigate();
 
   const swapStations = () => {
     const temp = fromStation;
@@ -183,49 +186,42 @@ export default function App() {
     });
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
+      if (event === "SIGNED_IN") {
+        try {
+          navigate("/");
+        } catch (e) {
+          // ignore navigation errors
+        }
+      }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  // Persist scroll position in sessionStorage and restore on reload/back-navigation.
+  // Ensure landing at top (hero) on every page load — do not restore previous scroll.
   useEffect(() => {
-    const saveScroll = () => {
-      try {
-        sessionStorage.setItem('sr:lastScroll', String(window.scrollY || 0));
-      } catch (e) { }
-    };
+    // 1. Force manual scroll restoration to prevent browser from remembering scroll position
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
+    }
 
-    const restoreScroll = () => {
-      try {
-        const entries = performance.getEntriesByType && performance.getEntriesByType('navigation');
-        const navType = (entries && entries[0] && entries[0].type) || (performance.navigation && performance.navigation.type === 1 ? 'reload' : 'navigate');
-        const saved = sessionStorage.getItem('sr:lastScroll');
+    // 2. Immediate scroll to top
+    window.scrollTo(0, 0);
 
-        // Only restore saved position for back/forward navigation.
-        // For reloads and fresh navigations, go to top (hero).
-        if (navType === 'back_forward' && saved) {
-          const y = parseInt(saved, 10) || 0;
-          requestAnimationFrame(() => window.scrollTo({ top: y, left: 0 }));
-        } else {
-          // reload or fresh navigation: go to top / hero
-          requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0 }));
-        }
-      } catch (e) { }
-    };
+    // 3. Reliable reload detection and redirect
+    const isReload = (
+      (window.performance &&
+        window.performance.getEntriesByType &&
+        window.performance.getEntriesByType('navigation')[0]?.type === 'reload') ||
+      (window.performance && window.performance.navigation && window.performance.navigation.type === 1)
+    );
 
-    // Restore once on mount
-    restoreScroll();
-
-    // Save on unload/pagehide
-    window.addEventListener('beforeunload', saveScroll);
-    window.addEventListener('pagehide', saveScroll);
-    return () => {
-      window.removeEventListener('beforeunload', saveScroll);
-      window.removeEventListener('pagehide', saveScroll);
-    };
+    if (isReload) {
+      // Force navigation to home page on reload
+      navigate('/', { replace: true });
+    }
   }, []);
 
   return (
@@ -240,12 +236,29 @@ export default function App() {
 
       <div className="min-h-screen flex flex-col pt-[70px]">
         <main className="flex-grow">
-          <Hero />
-          <BookingCard />
+          <Routes>
+            <Route
+              path="/"
+              element={
+                <>
+                  <Hero />
+                  <BookingCard />
+                  <div id="pnr-section" className="scroll-mt-[150px]">
+                    <Pnrstatus />
+                  </div>
+                  <div id="reviews-section" className="scroll-mt-[150px]">
+                    <Reviews />
+                  </div>
+                  <Support autoScroll={false} />
+                </>
+              }
+            />
 
-          <div id="pnr-section" className="scroll-mt-[150px]">
-            <Pnrstatus />
-          </div>
+
+
+            <Route path="/seat-layout" element={<SeatLayout />} />
+            <Route path="/support" element={<Support />} />
+          </Routes>
         </main>
 
         <Footer />

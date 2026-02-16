@@ -96,7 +96,6 @@ export default function PNRStatus() {
                   onChange={handleChange}
                   maxLength={10}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                  autoFocus
                 />
                 <div className="flex justify-between gap-2 lg:gap-4">
                   {[...Array(10)].map((_, i) => (

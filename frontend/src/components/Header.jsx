@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { User } from "lucide-react";
 import LabelNavbar from "./LabelNavbar";
 import Auth from "./Auth";
 import { supabase } from "../supabaseClient";
@@ -7,6 +9,20 @@ function Header({ onLoginClick }) {
   const [hidden, setHidden] = useState(false);
   const [user, setUser] = useState(null);
   const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef = useRef(null);
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   useEffect(() => {
     // Get current user from Supabase
@@ -65,23 +81,33 @@ function Header({ onLoginClick }) {
         `}
       >
         <div className="flex items-center gap-3">
-          <img src="/trainnew.png" alt="Logo" className="h-[50px]" />
-          <span className="text-[24px] font-bold text-[#2B2B2B] dark:text-white">
-            SmartRail
-          </span>
+          <div
+            onClick={() => {
+              navigate('/');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            className="flex items-center gap-3 cursor-pointer"
+          >
+            <img src="/trainnew.png" alt="Logo" className="h-[50px] hidden sm:block" />
+            <span className="text-[24px] font-bold text-[#2B2B2B] dark:text-white">
+              SmartRail
+            </span>
+          </div>
         </div>
 
         {user ? (
-          <div className="relative">
+          <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setShowDropdown(!showDropdown)}
-              className="px-5 py-2 rounded-lg border border-[#2B2B2B] text-[#2B2B2B] dark:text-white dark:border-white hover:bg-[#2B2B2B] hover:text-white dark:hover:bg-gray-700 transition font-medium"
+              className="px-3 sm:px-5 py-2 rounded-lg border border-[#2B2B2B] text-[#2B2B2B] dark:text-white dark:border-white hover:bg-[#2B2B2B] hover:text-white dark:hover:bg-gray-700 transition font-medium flex items-center gap-2"
             >
-              Hi, {user.name} ▾
+              <User className="h-4 w-4 sm:hidden" />
+              <span className="hidden sm:inline">Hi, {user.name}</span>
+              <span>▾</span>
             </button>
 
             {showDropdown && (
-              <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-[#2B2B2B] border border-[#D4D4D4] rounded-lg shadow-lg py-2 z-50">
+              <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-[#2B2B2B] border border-[#D4D4D4] rounded-lg shadow-lg py-2 z-50 animate-in fade-in zoom-in-95 duration-200">
                 <button
                   onClick={handleLogout}
                   className="w-full text-left px-4 py-2 text-[#2B2B2B] dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition"
