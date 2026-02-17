@@ -19,6 +19,13 @@ export default function Auth({ onClose }) {
   const [showPassword, setShowPassword] = useState(false);
   const [useOtpLogin, setUseOtpLogin] = useState(false); // Only for Login mode
 
+  // Forgot Password
+  const [forgotPasswordMode, setForgotPasswordMode] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const otpRefs = useRef([]);
   const passwordInputRef = useRef(null);
@@ -58,6 +65,11 @@ export default function Auth({ onClose }) {
     setError("");
     setSuccess("");
     setUseOtpLogin(false);
+    setForgotPasswordMode(false);
+    setNewPassword("");
+    setConfirmPassword("");
+    setShowNewPassword(false);
+    setShowConfirmPassword(false);
     setProfile({ fullName: "", dob: "", gender: "", email: "" });
     setEmailVerificationState({ code: "", sent: false, verified: false, loading: false });
   }, [mode]);
@@ -215,6 +227,14 @@ export default function Auth({ onClose }) {
           setLoading(false);
           return;
         }
+      }
+
+      // If Forgot Password Mode -> Go to Reset Password
+      if (forgotPasswordMode) {
+        setStep("reset_password");
+        setSuccess("Verified! Set your new password.");
+        setLoading(false);
+        return;
       }
 
       // Login Mode or Completed Profile -> Finish
@@ -420,12 +440,13 @@ export default function Auth({ onClose }) {
         {/* Header Text */}
         <div className="text-center space-y-1 mt-2 pb-4">
           <h2 className="text-2xl font-black uppercase tracking-tight text-[#2B2B2B]">
-            {step === 'profile' ? 'Finish Setup' : mode === 'login' ? 'Welcome Back' : 'Create Account'}
+            {step === 'reset_password' ? 'Reset Password' : step === 'profile' ? 'Finish Setup' : mode === 'login' ? (forgotPasswordMode ? 'Forgot Password' : 'Welcome Back') : 'Create Account'}
           </h2>
           <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
-            {step === 'credentials' && (mode === 'login' ? "Login to continue" : "Start your journey")}
+            {step === 'credentials' && (mode === 'login' ? (forgotPasswordMode ? "Verify via OTP to reset" : "Login to continue") : "Start your journey")}
             {step === 'otp' && "Verify your identity"}
             {step === 'profile' && "Tell us a bit about yourself"}
+            {step === 'reset_password' && "Set your new password"}
           </p>
         </div>
 
@@ -535,7 +556,17 @@ export default function Auth({ onClose }) {
                   >
                     {useOtpLogin ? "Use Password" : "Login via OTP"}
                   </button>
-                  <button type="button" className="text-[10px] font-bold text-gray-400 hover:text-[#2B2B2B] uppercase tracking-wide">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForgotPasswordMode(true);
+                      setUseOtpLogin(true);
+                      setPassword("");
+                      setError("");
+                      setSuccess("");
+                    }}
+                    className="text-[10px] font-bold text-gray-400 hover:text-[#2B2B2B] uppercase tracking-wide"
+                  >
                     Forgot Password?
                   </button>
                 </div>
@@ -628,7 +659,109 @@ export default function Auth({ onClose }) {
           </form>
         )}
 
-        {/* STEP 3: PROFILE COMPLETION (Signup Only) */}
+        {/* STEP 3: RESET PASSWORD (Forgot Password Flow) */}
+        {step === 'reset_password' && (
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setError("");
+              if (!newPassword || newPassword.length < 6) {
+                setError("Password must be at least 6 characters.");
+                return;
+              }
+              if (newPassword !== confirmPassword) {
+                setError("Passwords do not match.");
+                return;
+              }
+              setLoading(true);
+              try {
+                const { error } = await supabase.auth.updateUser({ password: newPassword });
+                if (error) throw error;
+                setSuccess("Password updated successfully!");
+                finishAuth();
+              } catch (err) {
+                setError(err.message);
+              } finally {
+                setLoading(false);
+              }
+            }}
+            className="flex flex-col gap-4"
+          >
+            <div className="bg-gray-100 border border-gray-200 p-4 rounded-xl mb-2">
+              <p className="text-xs text-gray-800 font-bold flex items-center gap-2">
+                <Lock className="w-4 h-4" /> Set New Password
+              </p>
+              <p className="text-[10px] text-gray-600 mt-1">
+                Choose a strong password for your account, or skip to continue with OTP login.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              {/* New Password */}
+              <div className="relative group animate-in fade-in slide-in-from-top-2">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <Lock className="w-5 h-5 text-gray-400" />
+                </div>
+                <input
+                  type={showNewPassword ? "text" : "password"}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="New Password"
+                  className="w-full pl-12 pr-12 py-4 bg-gray-50 border-2 border-transparent focus:border-[#2B2B2B] focus:bg-white rounded-xl outline-none transition-all font-medium text-[#2B2B2B] placeholder:text-gray-400"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600"
+                >
+                  {showNewPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+
+              {/* Confirm Password */}
+              <div className="relative group animate-in fade-in slide-in-from-top-2">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <Lock className="w-5 h-5 text-gray-400" />
+                </div>
+                <input
+                  type={showConfirmPassword ? "text" : "password"}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Confirm Password"
+                  className="w-full pl-12 pr-12 py-4 bg-gray-50 border-2 border-transparent focus:border-[#2B2B2B] focus:bg-white rounded-xl outline-none transition-all font-medium text-[#2B2B2B] placeholder:text-gray-400"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600"
+                >
+                  {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+            </div>
+
+            <button
+              disabled={loading || !newPassword || !confirmPassword}
+              className="mt-2 w-full bg-[#2B2B2B] text-white py-4 rounded-xl font-black uppercase tracking-widest hover:bg-black transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-black/10"
+            >
+              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <>Update Password <ArrowRight className="w-5 h-5" /></>}
+            </button>
+
+            {/* Skip option */}
+            <div className="text-center">
+              <button
+                type="button"
+                onClick={() => finishAuth()}
+                className="text-xs font-bold text-gray-400 hover:text-[#2B2B2B] uppercase tracking-widest transition-colors"
+              >
+                Skip & Continue
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* STEP 4: PROFILE COMPLETION (Signup Only) */}
         {step === 'profile' && (
           <form onSubmit={handleProfileSubmit} className="flex flex-col gap-4">
             <div className="bg-gray-100 border border-gray-200 p-4 rounded-xl mb-2">

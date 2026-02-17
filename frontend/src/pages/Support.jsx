@@ -164,17 +164,18 @@ export default function Support({ autoScroll = true }) {
     if (!replyText.trim() || !selectedComplaint) return;
 
     setSubmittingReply(true);
+    setErrorMessage('');
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        console.error('No session found - cannot submit reply');
         setErrorMessage('Please log in to send a reply');
         setTimeout(() => setErrorMessage(''), 3000);
         setSubmittingReply(false);
         return;
       }
 
+      // Use the backend API which has supabaseAdmin (bypasses RLS)
       const response = await fetch(`http://localhost:5000/api/complaints/${selectedComplaint.id}/replies`, {
         method: 'POST',
         headers: {
@@ -187,29 +188,28 @@ export default function Support({ autoScroll = true }) {
         })
       });
 
-      if (response.ok) {
-        const data = await response.json();
+      const data = await response.json();
 
-        // Add new reply to the list
-        setReplies([...replies, data.reply]);
-        setReplyText("");
-        setErrorMessage('');
+      if (!response.ok) {
+        console.error('Reply error:', data);
+        setErrorMessage(`Failed to send: ${data.error}${data.details ? ' — ' + data.details : ''}`);
+        setTimeout(() => setErrorMessage(''), 5000);
+        return;
+      }
 
-        // If marked as resolved, update the complaint status locally
-        if (markResolved) {
-          setSelectedComplaint({ ...selectedComplaint, status: 'resolved' });
-          setHistory(prev => prev.map(item =>
-            item.id === selectedComplaint.id
-              ? { ...item, status: 'resolved' }
-              : item
-          ));
-          setMarkResolved(false);
-        }
-      } else {
-        const errorData = await response.json();
-        console.error('Failed to submit reply:', errorData.error);
-        setErrorMessage(`Failed to send: ${errorData.error}`);
-        setTimeout(() => setErrorMessage(''), 3000);
+      // Add new reply to the list
+      setReplies(prev => [...prev, data.reply]);
+      setReplyText("");
+
+      // If marked as resolved, update local state immediately
+      if (markResolved) {
+        setSelectedComplaint(prev => ({ ...prev, status: 'resolved' }));
+        setHistory(prev => prev.map(item =>
+          item.id === selectedComplaint.id
+            ? { ...item, status: 'resolved' }
+            : item
+        ));
+        setMarkResolved(false);
       }
     } catch (error) {
       console.error('Error submitting reply:', error);
@@ -657,30 +657,38 @@ export default function Support({ autoScroll = true }) {
                         className="w-full bg-[#2a2a2a] border border-[#444] rounded-lg p-3 text-sm text-white placeholder-gray-500 focus:border-white/30 focus:outline-none transition-colors resize-none"
                         rows={3}
                       />
-                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                        <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer hover:text-gray-300 transition-colors">
-                          <input
-                            type="checkbox"
-                            checked={markResolved}
-                            onChange={(e) => setMarkResolved(e.target.checked)}
-                            className="w-4 h-4 rounded border-gray-600 bg-[#2a2a2a] text-green-500 focus:ring-green-500/20"
-                          />
-                          Mark this issue as resolved
-                        </label>
-                        <button
-                          onClick={handleSubmitReply}
-                          disabled={!replyText.trim() || submittingReply}
-                          className="px-6 py-2.5 bg-white text-black rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-gray-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                        >
-                          {submittingReply ? (
-                            <>
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                              Sending...
-                            </>
-                          ) : (
-                            'Send Reply'
-                          )}
-                        </button>
+                      <div className="flex flex-col gap-3">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                          <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer hover:text-gray-300 transition-colors">
+                            <input
+                              type="checkbox"
+                              checked={markResolved}
+                              onChange={(e) => setMarkResolved(e.target.checked)}
+                              className="w-4 h-4 rounded border-gray-600 bg-[#2a2a2a] text-green-500 focus:ring-green-500/20"
+                            />
+                            Mark this issue as resolved
+                          </label>
+                          <button
+                            onClick={handleSubmitReply}
+                            disabled={!replyText.trim() || submittingReply}
+                            className="px-6 py-2.5 bg-white text-black rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-gray-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                          >
+                            {submittingReply ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Sending...
+                              </>
+                            ) : (
+                              'Send Reply'
+                            )}
+                          </button>
+                        </div>
+                        {markResolved && (
+                          <p className="text-[10px] text-green-400 font-bold uppercase tracking-widest flex items-center gap-1.5 animate-in fade-in slide-in-from-top-1 duration-200">
+                            <CheckCircle2 className="w-3 h-3" />
+                            This reply will mark the complaint as resolved
+                          </p>
+                        )}
                       </div>
                     </div>
                   )}

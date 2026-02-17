@@ -78,6 +78,8 @@ router.post('/:complaintId/replies', async (req, res) => {
         const { message, marks_resolved } = req.body;
         const authHeader = req.headers.authorization;
 
+        console.log('📝 Creating reply for complaint:', complaintId, '| marks_resolved:', marks_resolved);
+
         if (!authHeader) {
             return res.status(401).json({ error: 'Unauthorized' });
         }
@@ -92,10 +94,13 @@ router.post('/:complaintId/replies', async (req, res) => {
         const { data: { user }, error: userError } = await supabase.auth.getUser(token);
 
         if (userError || !user) {
+            console.log('❌ Auth error:', userError);
             return res.status(401).json({ error: 'Invalid token' });
         }
 
-        // Verify user owns this complaint (using admin client to bypass RLS)
+        console.log('✅ User authenticated:', user.id);
+
+        // Verify user owns this complaint
         const { data: complaint, error: complaintError } = await supabaseAdmin
             .from('complaints')
             .select('id, user_id, status')
@@ -104,37 +109,76 @@ router.post('/:complaintId/replies', async (req, res) => {
             .single();
 
         if (complaintError || !complaint) {
+            console.log('❌ Complaint error:', complaintError);
             return res.status(404).json({ error: 'Complaint not found or access denied' });
         }
 
-        // Check if complaint is closed or resolved
-        if (complaint.status === 'closed' || complaint.status === 'resolved') {
-            return res.status(400).json({ error: 'Cannot reply to closed or resolved complaints' });
+        console.log('✅ Complaint found, status:', complaint.status);
+
+        if (complaint.status === 'closed') {
+            return res.status(400).json({ error: 'Cannot reply to closed complaints' });
         }
 
-        // Insert the reply (using admin client)
+        // Build the insert object — ALWAYS insert with marks_resolved: false
+        // to avoid triggering the broken DB trigger (which references a non-existent
+        // updated_at column on complaints). We update marks_resolved separately after.
+        const replyData = {
+            complaint_id: complaintId,
+            user_id: user.id,
+            message: message.trim(),
+            is_admin_reply: false,
+            marks_resolved: false
+        };
+
+        console.log('📤 Inserting reply...');
+
+        // Insert the reply
         const { data: newReply, error: insertError } = await supabaseAdmin
             .from('complaint_replies')
-            .insert({
-                complaint_id: complaintId,
-                user_id: user.id,
-                message: message.trim(),
-                is_admin_reply: false,
-                marks_resolved: marks_resolved || false
-            })
+            .insert(replyData)
             .select()
             .single();
 
         if (insertError) {
-            console.error('Insert error:', insertError);
-            return res.status(500).json({ error: 'Failed to create reply' });
+            console.error('❌ Insert error:', insertError.message, '| Code:', insertError.code);
+            return res.status(500).json({
+                error: 'Failed to create reply',
+                details: insertError.message
+            });
+        }
+
+        console.log('✅ Reply created:', newReply.id);
+
+        // If marks_resolved was intended, update the reply and complaint status separately
+        // (UPDATE doesn't trigger the AFTER INSERT trigger, so this is safe)
+        if (marks_resolved) {
+            // Update the reply to mark it as resolved
+            await supabaseAdmin
+                .from('complaint_replies')
+                .update({ marks_resolved: true })
+                .eq('id', newReply.id);
+
+            // Update the complaint status to 'resolved'
+            const { error: statusError } = await supabaseAdmin
+                .from('complaints')
+                .update({ status: 'resolved' })
+                .eq('id', complaintId);
+
+            if (statusError) {
+                console.error('⚠️ Status update error:', statusError.message);
+            } else {
+                console.log('✅ Complaint', complaintId, 'marked as resolved');
+            }
+
+            // Return the reply with the correct marks_resolved value
+            newReply.marks_resolved = true;
         }
 
         res.status(201).json({ reply: newReply });
 
     } catch (error) {
-        console.error('Error creating reply:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        console.error('💥 Error creating reply:', error);
+        res.status(500).json({ error: 'Internal server error', details: error.message });
     }
 });
 
