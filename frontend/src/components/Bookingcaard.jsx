@@ -1,8 +1,13 @@
 import { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import lookupData from "../data/lookupData.json";
 
-const API_BASE = "http://localhost:5000/api/trains";
+const allStations = lookupData.stations;
+const allTrains = lookupData.trains;
 
 export default function BookingCard() {
+  const navigate = useNavigate();
+
   /* ================= STATES ================= */
   const [searchMode, setSearchMode] = useState("route"); // route | train
   const [trainQuery, setTrainQuery] = useState("");
@@ -64,43 +69,31 @@ export default function BookingCard() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  /* ================= API HELPERS ================= */
+  /* ================= LOCAL LOOKUP HELPERS ================= */
   const fetchStationSuggestions = (query, setter, showSetter) => {
     if (stationDebounceRef.current) clearTimeout(stationDebounceRef.current);
     if (!query || query.length < 2) { setter([]); return; }
-    stationDebounceRef.current = setTimeout(async () => {
-      try {
-        const res = await fetch(`${API_BASE}/search/stations?q=${encodeURIComponent(query)}`);
-        const json = await res.json();
-        if (json.success && json.data) {
-          const inner = json.data.data || json.data;
-          const results = inner.stations || (Array.isArray(inner) ? inner : []);
-          setter(results.slice(0, 10));
-          showSetter(true);
-        }
-      } catch (e) {
-        console.error('Station search failed:', e);
-      }
-    }, 300);
+    stationDebounceRef.current = setTimeout(() => {
+      const q = query.toLowerCase();
+      const results = allStations.filter(s =>
+        s.name.toLowerCase().includes(q) || s.code.toLowerCase().includes(q)
+      ).slice(0, 10);
+      setter(results);
+      showSetter(results.length > 0);
+    }, 150);
   };
 
   const fetchTrainSuggestions = (query) => {
     if (trainDebounceRef.current) clearTimeout(trainDebounceRef.current);
     if (!query || query.length < 2) { setTrainSuggestions([]); return; }
-    trainDebounceRef.current = setTimeout(async () => {
-      try {
-        const res = await fetch(`${API_BASE}/search/trains?q=${encodeURIComponent(query)}`);
-        const json = await res.json();
-        if (json.success && json.data) {
-          const inner = json.data.data || json.data;
-          const results = Array.isArray(inner) ? inner : (inner.trains || []);
-          setTrainSuggestions(results.slice(0, 8));
-          setShowTrainSuggestions(true);
-        }
-      } catch (e) {
-        console.error('Train search failed:', e);
-      }
-    }, 300);
+    trainDebounceRef.current = setTimeout(() => {
+      const q = query.toLowerCase();
+      const results = allTrains.filter(t =>
+        t.trainName.toLowerCase().includes(q) || t.trainNumber.includes(q)
+      ).slice(0, 8);
+      setTrainSuggestions(results);
+      setShowTrainSuggestions(results.length > 0);
+    }, 150);
   };
 
   /* ================= HELPERS ================= */
@@ -117,6 +110,7 @@ export default function BookingCard() {
     setTo(temp);
   };
 
+  /* ================= NAVIGATE ================= */
   const handleSearch = () => {
     if (searchMode === "route") {
       if (!from || !to) {
@@ -127,15 +121,18 @@ export default function BookingCard() {
         setError("Source and destination cannot be the same");
         return;
       }
+      navigate(`/results?mode=route&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&date=${selectedDate.toISOString()}&class=${travelClass}`);
     }
 
-    if (searchMode === "train" && !trainQuery) {
-      setError("Please enter train name or number");
-      return;
+    if (searchMode === "train") {
+      if (!trainQuery) {
+        setError("Please enter train name or number");
+        return;
+      }
+      navigate(`/results?mode=train&q=${encodeURIComponent(trainQuery)}`);
     }
 
     setError("");
-    window.location.href = "/results";
   };
 
   /* ================= JSX ================= */
@@ -210,13 +207,13 @@ export default function BookingCard() {
                       <div
                         key={idx}
                         onClick={() => {
-                          setTrainQuery(`${train.trainName || train.name || ''} (${train.trainNumber || train.number || ''})`);
+                          setTrainQuery(`${train.trainName} (${train.trainNumber})`);
                           setShowTrainSuggestions(false);
                         }}
                         className="px-4 py-3 hover:bg-[#D4D4D4]/40 cursor-pointer border-b border-[#E5E5E5] last:border-b-0"
                       >
-                        <div className="text-sm font-medium text-[#242424]">{train.trainName || train.name}</div>
-                        <div className="text-xs text-[#6B6B6B]">#{train.trainNumber || train.number} • {train.sourceStationCode || ''} → {train.destinationStationCode || ''}</div>
+                        <div className="text-sm font-medium text-[#242424]">{train.trainName}</div>
+                        <div className="text-xs text-[#6B6B6B]">#{train.trainNumber} • {train.source} → {train.destination}</div>
                       </div>
                     ))}
                   </div>
@@ -247,13 +244,13 @@ export default function BookingCard() {
                         <div
                           key={idx}
                           onClick={() => {
-                            setFrom(`${station.name || station.station_name || ''} (${station.code || station.station_code || ''})`);
+                            setFrom(`${station.name} (${station.code})`);
                             setShowFrom(false);
                           }}
                           className="px-4 py-3 hover:bg-[#D4D4D4]/40 cursor-pointer border-b border-[#E5E5E5] last:border-b-0"
                         >
-                          <div className="text-sm font-medium text-[#242424]">{station.name || station.station_name}</div>
-                          <div className="text-xs text-[#6B6B6B]">{station.code || station.station_code} • {station.city || station.state || ''}</div>
+                          <div className="text-sm font-medium text-[#242424]">{station.name}</div>
+                          <div className="text-xs text-[#6B6B6B]">{station.code}</div>
                         </div>
                       ))}
                     </div>
@@ -287,13 +284,13 @@ export default function BookingCard() {
                         <div
                           key={idx}
                           onClick={() => {
-                            setTo(`${station.name || station.station_name || ''} (${station.code || station.station_code || ''})`);
+                            setTo(`${station.name} (${station.code})`);
                             setShowTo(false);
                           }}
                           className="px-4 py-3 hover:bg-[#D4D4D4]/40 cursor-pointer border-b border-[#E5E5E5] last:border-b-0"
                         >
-                          <div className="text-sm font-medium text-[#242424]">{station.name || station.station_name}</div>
-                          <div className="text-xs text-[#6B6B6B]">{station.code || station.station_code} • {station.city || station.state || ''}</div>
+                          <div className="text-sm font-medium text-[#242424]">{station.name}</div>
+                          <div className="text-xs text-[#6B6B6B]">{station.code}</div>
                         </div>
                       ))}
                     </div>

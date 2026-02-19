@@ -8,6 +8,7 @@ import BookingCard from "./components/Bookingcaard";
 import Pnrstatus from "./components/Pnrstatus";   // ✅ CORRECT
 import Auth from "./components/Auth";
 import Support from "./pages/Support";
+import Results from "./pages/Results";
 import Reviews from "./components/Reviews";
 
 import { BrowserRouter as Router, Routes, Route, useNavigate } from "react-router-dom";
@@ -188,13 +189,8 @@ export default function App() {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
-      if (event === "SIGNED_IN") {
-        try {
-          navigate("/");
-        } catch (e) {
-          // ignore navigation errors
-        }
-      }
+      // Remove auto-navigation to avoid refreshing/redirecting on window focus
+      // if (event === "SIGNED_IN") { ... } 
     });
 
     return () => subscription.unsubscribe();
@@ -254,8 +250,7 @@ export default function App() {
               }
             />
 
-
-
+            <Route path="/results" element={<Results />} />
             <Route path="/seat-layout" element={<SeatLayout />} />
             <Route path="/support" element={<Support />} />
           </Routes>

@@ -12,6 +12,7 @@ export default function Auth({ onClose }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [dobError, setDobError] = useState("");
 
   // Data
   const [identifier, setIdentifier] = useState(""); // Email or Phone
@@ -378,6 +379,21 @@ export default function Auth({ onClose }) {
     try {
       if (!profile.fullName || !profile.dob || !profile.gender) {
         throw new Error("Please fill in all fields.");
+      }
+
+      // Validate DOB: must not be in the future and age must be >= 18
+      const selectedDate = new Date(profile.dob);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (selectedDate > today) {
+        setDobError("Date of birth cannot be in the future.");
+        throw new Error("Please correct your date of birth.");
+      }
+      const age = today.getFullYear() - selectedDate.getFullYear() -
+        (today < new Date(today.getFullYear(), selectedDate.getMonth(), selectedDate.getDate()) ? 1 : 0);
+      if (age < 18) {
+        setDobError("You must be at least 18 years old to register.");
+        throw new Error("You must be at least 18 years old to register.");
       }
 
       if (!emailVerificationState.verified) {
@@ -872,18 +888,42 @@ export default function Auth({ onClose }) {
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">Date of Birth</label>
                   <div
-                    className="relative cursor-pointer group"
+                    className={`relative cursor-pointer group`}
                     onClick={() => dateInputRef.current?.showPicker()}
                   >
-                    <Calendar className="absolute left-3 top-3 w-4 h-4 text-gray-400 group-hover:text-[#2B2B2B] transition-colors pointer-events-none" />
+                    <Calendar className={`absolute left-3 top-3 w-4 h-4 ${dobError ? 'text-red-400' : 'text-gray-400'} group-hover:text-[#2B2B2B] transition-colors pointer-events-none`} />
                     <input
                       ref={dateInputRef}
                       type="date"
                       value={profile.dob}
-                      onChange={(e) => setProfile({ ...profile, dob: e.target.value })}
-                      className="w-full pl-10 pr-4 py-3 bg-gray-50 border-2 border-transparent focus:border-[#2B2B2B] focus:bg-white rounded-xl outline-none font-medium text-sm text-[#2B2B2B] transition-all duration-200 cursor-pointer"
+                      max={new Date().toISOString().split('T')[0]}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setProfile({ ...profile, dob: val });
+                        setDobError('');
+                        if (val) {
+                          const selected = new Date(val);
+                          const now = new Date();
+                          now.setHours(0, 0, 0, 0);
+                          if (selected > now) {
+                            setDobError('Date of birth cannot be in the future.');
+                          } else {
+                            const age = now.getFullYear() - selected.getFullYear() -
+                              (now < new Date(now.getFullYear(), selected.getMonth(), selected.getDate()) ? 1 : 0);
+                            if (age < 18) {
+                              setDobError('You must be at least 18 years old to register.');
+                            }
+                          }
+                        }
+                      }}
+                      className={`w-full pl-10 pr-4 py-3 bg-gray-50 border-2 ${dobError ? 'border-red-400 bg-red-50' : 'border-transparent'} focus:border-[#2B2B2B] focus:bg-white rounded-xl outline-none font-medium text-sm text-[#2B2B2B] transition-all duration-200 cursor-pointer`}
                     />
                   </div>
+                  {dobError && (
+                    <p className="text-[11px] text-red-500 font-semibold ml-1 flex items-center gap-1 animate-in fade-in slide-in-from-top-1 duration-200">
+                      ⚠ {dobError}
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-1">
