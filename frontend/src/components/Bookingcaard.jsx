@@ -1,10 +1,18 @@
 import { useState, useRef, useEffect } from "react";
-import stations from "../data/stations.json";
+import { useNavigate } from "react-router-dom";
+import lookupData from "../data/lookupData.json";
+
+const allStations = lookupData.stations;
+const allTrains = lookupData.trains;
 
 export default function BookingCard() {
+  const navigate = useNavigate();
+
   /* ================= STATES ================= */
   const [searchMode, setSearchMode] = useState("route"); // route | train
   const [trainQuery, setTrainQuery] = useState("");
+  const [trainSuggestions, setTrainSuggestions] = useState([]);
+  const [showTrainSuggestions, setShowTrainSuggestions] = useState(false);
 
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -37,6 +45,9 @@ export default function BookingCard() {
   const fromRef = useRef(null);
   const toRef = useRef(null);
   const dateRef = useRef(null);
+  const trainRef = useRef(null);
+  const stationDebounceRef = useRef(null);
+  const trainDebounceRef = useRef(null);
 
   /* ================= EFFECTS ================= */
   useEffect(() => setMounted(true), []);
@@ -51,10 +62,39 @@ export default function BookingCard() {
         setShowFrom(false);
       if (toRef.current && !toRef.current.contains(e.target))
         setShowTo(false);
+      if (trainRef.current && !trainRef.current.contains(e.target))
+        setShowTrainSuggestions(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  /* ================= LOCAL LOOKUP HELPERS ================= */
+  const fetchStationSuggestions = (query, setter, showSetter) => {
+    if (stationDebounceRef.current) clearTimeout(stationDebounceRef.current);
+    if (!query || query.length < 2) { setter([]); return; }
+    stationDebounceRef.current = setTimeout(() => {
+      const q = query.toLowerCase();
+      const results = allStations.filter(s =>
+        s.name.toLowerCase().includes(q) || s.code.toLowerCase().includes(q)
+      ).slice(0, 10);
+      setter(results);
+      showSetter(results.length > 0);
+    }, 150);
+  };
+
+  const fetchTrainSuggestions = (query) => {
+    if (trainDebounceRef.current) clearTimeout(trainDebounceRef.current);
+    if (!query || query.length < 2) { setTrainSuggestions([]); return; }
+    trainDebounceRef.current = setTimeout(() => {
+      const q = query.toLowerCase();
+      const results = allTrains.filter(t =>
+        t.trainName.toLowerCase().includes(q) || t.trainNumber.includes(q)
+      ).slice(0, 8);
+      setTrainSuggestions(results);
+      setShowTrainSuggestions(results.length > 0);
+    }, 150);
+  };
 
   /* ================= HELPERS ================= */
   const formatDate = (date) =>
@@ -70,6 +110,7 @@ export default function BookingCard() {
     setTo(temp);
   };
 
+  /* ================= NAVIGATE ================= */
   const handleSearch = () => {
     if (searchMode === "route") {
       if (!from || !to) {
@@ -80,20 +121,23 @@ export default function BookingCard() {
         setError("Source and destination cannot be the same");
         return;
       }
+      navigate(`/results?mode=route&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&date=${selectedDate.toISOString()}&class=${travelClass}`);
     }
 
-    if (searchMode === "train" && !trainQuery) {
-      setError("Please enter train name or number");
-      return;
+    if (searchMode === "train") {
+      if (!trainQuery) {
+        setError("Please enter train name or number");
+        return;
+      }
+      navigate(`/results?mode=train&q=${encodeURIComponent(trainQuery)}`);
     }
 
     setError("");
-    window.location.href = "/results";
   };
 
   /* ================= JSX ================= */
   return (
-<div className="relative max-w-6xl mx-auto mt-2 md:mt-3 lg:mt-4 px-4">
+    <div className="relative max-w-6xl mx-auto mt-2 md:mt-3 lg:mt-4 px-4">
 
       <div
         className={`
@@ -115,10 +159,9 @@ export default function BookingCard() {
                 bg-white
                 border-2
                 transition
-                ${
-                  searchMode === mode
-                    ? "border-dashed border-[#242424] text-[#242424]"
-                    : "border-solid border-[#E5E5E5] text-[#6B6B6B]"
+                ${searchMode === mode
+                  ? "border-dashed border-[#242424] text-[#242424]"
+                  : "border-solid border-[#E5E5E5] text-[#6B6B6B]"
                 }
               `}
             >
@@ -128,7 +171,7 @@ export default function BookingCard() {
         </div>
 
         {/* CONTENT */}
-<div className="px-4 md:px-6 pb-5 md:pb-6 pt-4 bg-[#D4D4D4]/50 rounded-2xl md:rounded-[28px] border-t border-white/40">
+        <div className="px-4 md:px-6 pb-5 md:pb-6 pt-4 bg-[#D4D4D4]/50 rounded-2xl md:rounded-[28px] border-t border-white/40">
 
           {/* INPUT ROW */}
           <div
@@ -141,16 +184,40 @@ export default function BookingCard() {
           >
             {/* TRAIN MODE */}
             {searchMode === "train" && (
-              <div className="md:col-span-2 lg:col-span-3 bg-[#F5F5F5] rounded-xl px-4 py-4">
+              <div ref={trainRef} className="relative md:col-span-2 lg:col-span-3 bg-[#F5F5F5] rounded-xl px-4 py-4">
                 <label className="text-[11px] text-[#6B6B6B]">
                   Train Name / Number
                 </label>
                 <input
                   value={trainQuery}
-                  onChange={(e) => setTrainQuery(e.target.value)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setTrainQuery(v);
+                    fetchTrainSuggestions(v);
+                  }}
+                  onFocus={() => { if (trainSuggestions.length > 0) setShowTrainSuggestions(true); }}
                   className="w-full bg-transparent outline-none text-sm font-medium text-[#242424] mt-1"
                   placeholder="12301 / Rajdhani Express"
                 />
+
+                {/* TRAIN SUGGESTIONS DROPDOWN */}
+                {showTrainSuggestions && trainSuggestions.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full mt-2 bg-white rounded-xl shadow-lg z-50 border border-[#D4D4D4] max-h-60 overflow-y-auto">
+                    {trainSuggestions.map((train, idx) => (
+                      <div
+                        key={idx}
+                        onClick={() => {
+                          setTrainQuery(`${train.trainName} (${train.trainNumber})`);
+                          setShowTrainSuggestions(false);
+                        }}
+                        className="px-4 py-3 hover:bg-[#D4D4D4]/40 cursor-pointer border-b border-[#E5E5E5] last:border-b-0"
+                      >
+                        <div className="text-sm font-medium text-[#242424]">{train.trainName}</div>
+                        <div className="text-xs text-[#6B6B6B]">#{train.trainNumber} • {train.source} → {train.destination}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
@@ -164,19 +231,12 @@ export default function BookingCard() {
                     onChange={(e) => {
                       const v = e.target.value;
                       setFrom(v);
-                      setShowFrom(true);
-                      setFilteredFrom(
-                        stations.filter((s) =>
-                          `${s.name} ${s.code} ${s.city}`
-                            .toLowerCase()
-                            .includes(v.toLowerCase())
-                        )
-                      );
+                      fetchStationSuggestions(v, setFilteredFrom, setShowFrom);
                     }}
                     className="w-full bg-transparent outline-none text-sm font-medium text-[#242424] mt-1"
                     placeholder="Enter source"
                   />
-                  
+
                   {/* FROM SUGGESTIONS DROPDOWN */}
                   {showFrom && filteredFrom.length > 0 && (
                     <div className="absolute left-0 right-0 top-full mt-2 bg-white rounded-xl shadow-lg z-50 border border-[#D4D4D4] max-h-60 overflow-y-auto">
@@ -190,7 +250,7 @@ export default function BookingCard() {
                           className="px-4 py-3 hover:bg-[#D4D4D4]/40 cursor-pointer border-b border-[#E5E5E5] last:border-b-0"
                         >
                           <div className="text-sm font-medium text-[#242424]">{station.name}</div>
-                          <div className="text-xs text-[#6B6B6B]">{station.code} • {station.city}</div>
+                          <div className="text-xs text-[#6B6B6B]">{station.code}</div>
                         </div>
                       ))}
                     </div>
@@ -211,19 +271,12 @@ export default function BookingCard() {
                     onChange={(e) => {
                       const v = e.target.value;
                       setTo(v);
-                      setShowTo(true);
-                      setFilteredTo(
-                        stations.filter((s) =>
-                          `${s.name} ${s.code} ${s.city}`
-                            .toLowerCase()
-                            .includes(v.toLowerCase())
-                        )
-                      );
+                      fetchStationSuggestions(v, setFilteredTo, setShowTo);
                     }}
                     className="w-full bg-transparent outline-none text-sm font-medium text-[#242424] mt-1"
                     placeholder="Enter destination"
                   />
-                  
+
                   {/* TO SUGGESTIONS DROPDOWN */}
                   {showTo && filteredTo.length > 0 && (
                     <div className="absolute left-0 right-0 top-full mt-2 bg-white rounded-xl shadow-lg z-50 border border-[#D4D4D4] max-h-60 overflow-y-auto">
@@ -237,7 +290,7 @@ export default function BookingCard() {
                           className="px-4 py-3 hover:bg-[#D4D4D4]/40 cursor-pointer border-b border-[#E5E5E5] last:border-b-0"
                         >
                           <div className="text-sm font-medium text-[#242424]">{station.name}</div>
-                          <div className="text-xs text-[#6B6B6B]">{station.code} • {station.city}</div>
+                          <div className="text-xs text-[#6B6B6B]">{station.code}</div>
                         </div>
                       ))}
                     </div>
@@ -247,25 +300,25 @@ export default function BookingCard() {
             )}
 
             {/* DATE (CALENDAR OPENS ABOVE WITH 2px GAP) */}
-<div ref={dateRef} className="relative md:col-span-2 lg:col-span-1">
-  
-  {/* Visible Date Card */}
-  <div
-    className="bg-[#F5F5F5] rounded-xl px-4 py-4 cursor-pointer"
-    onClick={() => dateRef.current?.querySelector("input")?.showPicker()}
-  >
-    <label className="text-[11px] text-[#6B6B6B]">Date</label>
-    <div className="text-sm font-semibold text-[#242424] mt-1">
-      {formatDate(selectedDate)}
-    </div>
-  </div>
+            <div ref={dateRef} className="relative md:col-span-2 lg:col-span-1">
 
-  {/* Hidden Date Input (controls calendar position) */}
-  <input
-    type="date"
-    value={selectedDate.toISOString().split("T")[0]}
-    onChange={(e) => setSelectedDate(new Date(e.target.value))}
-    className="
+              {/* Visible Date Card */}
+              <div
+                className="bg-[#F5F5F5] rounded-xl px-4 py-4 cursor-pointer"
+                onClick={() => dateRef.current?.querySelector("input")?.showPicker()}
+              >
+                <label className="text-[11px] text-[#6B6B6B]">Date</label>
+                <div className="text-sm font-semibold text-[#242424] mt-1">
+                  {formatDate(selectedDate)}
+                </div>
+              </div>
+
+              {/* Hidden Date Input (controls calendar position) */}
+              <input
+                type="date"
+                value={selectedDate.toISOString().split("T")[0]}
+                onChange={(e) => setSelectedDate(new Date(e.target.value))}
+                className="
       absolute
       bottom-full
       mb-[2px]
@@ -275,8 +328,8 @@ export default function BookingCard() {
       opacity-0
       cursor-pointer
     "
-  />
-</div>
+              />
+            </div>
 
 
             {/* SEARCH */}
@@ -292,7 +345,7 @@ export default function BookingCard() {
           <div className="mt-4 md:mt-5">
             {/* QUICK FILTERS TEXT */}
             <div className="text-xs md:text-sm font-medium text-[#6B6B6B] mb-3">Quick Filters</div>
-            
+
             <div className="flex flex-wrap items-center gap-2 md:gap-3">
               {[
                 ["AC Only", "acOnly"],
@@ -304,10 +357,9 @@ export default function BookingCard() {
                   key={key}
                   onClick={() => setFilters({ ...filters, [key]: !filters[key] })}
                   className={`px-3 md:px-4 py-2.5 rounded-full border text-xs md:text-sm transition
-                    ${
-                      filters[key]
-                        ? "bg-[#242424] text-white border-[#242424]"
-                        : "bg-white text-[#242424] border-[#B3B3B3]"
+                    ${filters[key]
+                      ? "bg-[#242424] text-white border-[#242424]"
+                      : "bg-white text-[#242424] border-[#B3B3B3]"
                     }`}
                 >
                   {label}

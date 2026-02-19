@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import LabelNavbar from "../labels/LabelNavbar";
+import LabelNavbar from "./LabelNavbar";
 import PNRResult from "./Pnrresult";
 
 export default function PNRStatus() {
@@ -73,7 +73,7 @@ export default function PNRStatus() {
     <>
       <LabelNavbar />
 
-      <div id="pnr-section" className="max-w-6xl mx-auto mt-20 px-4 pb-14 flex justify-center flex-col text-white">
+      <div id="pnr-section" className="max-w-6xl mx-auto mt-28 px-4 pb-14 flex justify-center flex-col text-white">
 
         {!showResult ? (
           <>
@@ -96,7 +96,6 @@ export default function PNRStatus() {
                   onChange={handleChange}
                   maxLength={10}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                  autoFocus
                 />
                 <div className="flex justify-between gap-2 lg:gap-4">
                   {[...Array(10)].map((_, i) => (
