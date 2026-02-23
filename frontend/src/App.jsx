@@ -185,6 +185,9 @@ export default function App() {
 
   // ✅ Supabase auth state listener
   useEffect(() => {
+    // Flag to prevent SIGNED_OUT handler from interfering during TTE redirect
+    let isTTERedirecting = false;
+
     // Check for explicit logout from another app (like TTE portal)
     const params = new URLSearchParams(window.location.search);
     const isLogout = params.get('logout') === 'true';
@@ -197,34 +200,44 @@ export default function App() {
         // Clean up the URL without a full page reload so it doesn't loop
         window.history.replaceState({}, document.title, "/");
       });
-      return; // Exit early so we don't process further auth steps on this mount
+      // NOTE: Do NOT return early here — we still need the onAuthStateChange
+      // listener below so that the next login attempt is detected.
     }
 
-    // Check for existing session (only if NOT explicitly logging out)
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      if (session?.user?.email?.toLowerCase().includes('tte')) {
-        // Sign out from frontend so they don't have a confusing passive session here
-        supabase.auth.signOut().then(() => {
-          window.location.href = 'http://localhost:5174/login';
-        });
+    // Helper: check if TTE user and redirect
+    const handleTTERedirect = (email) => {
+      if (email?.toLowerCase().includes('tte')) {
+        isTTERedirecting = true;
+        window.location.href = 'http://localhost:5176/';
+        return true;
       }
-    });
+      return false;
+    };
 
-    // Listen for auth changes
+    // Check for existing session (only if NOT explicitly logging out)
+    if (!isLogout) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        setUser(session?.user ?? null);
+        handleTTERedirect(session?.user?.email);
+      });
+    }
+
+    // Listen for auth changes — ALWAYS register this
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      // If we are actively in the middle of logging out, don't trigger the login redirect
-      if (event === 'SIGNED_OUT') {
+      // If we are actively in the middle of a TTE redirect, ignore all events
+      if (isTTERedirecting) return;
+
+      // If we are actively in the middle of logging out (check URL to avoid stale closure)
+      const currentParams = new URLSearchParams(window.location.search);
+      const currentlyLoggingOut = currentParams.get('logout') === 'true';
+
+      if (event === 'SIGNED_OUT' || currentlyLoggingOut) {
         setUser(null);
         return;
       }
 
       setUser(session?.user ?? null);
-      if (session?.user?.email?.toLowerCase().includes('tte')) {
-        supabase.auth.signOut().then(() => {
-          window.location.href = 'http://localhost:5174/login';
-        });
-      }
+      handleTTERedirect(session?.user?.email);
     });
 
     return () => subscription.unsubscribe();

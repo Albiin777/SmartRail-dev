@@ -320,8 +320,11 @@ export default function BookingCard() {
               <input
                 type="date"
                 value={selectedDate.toISOString().split("T")[0]}
-                onChange={(e) => setSelectedDate(new Date(e.target.value))}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                onChange={(e) => {
+                  const [y, m, d] = e.target.value.split('-').map(Number);
+                  setSelectedDate(new Date(y, m - 1, d));
+                }}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 block"
               />
             </div>
 
