@@ -1,0 +1,24 @@
+[
+  {
+    "sequence": 28,
+    "stationCode": "TRVL",
+    "stationName": "Tiruvalla",
+    "distanceFromSourceKm": 134.8,
+    "journeyDay": 1,
+    "arrivalTime": "23:31",
+    "departureTime": "23:32",
+    "haltMinutes": 1,
+    "isHalt": true
+  },
+  {
+    "sequence": 44,
+    "stationCode": "ERN",
+    "stationName": "Ernakulam Town",
+    "distanceFromSourceKm": 220.5,
+    "journeyDay": 2,
+    "arrivalTime": "01:05",
+    "departureTime": "01:10",
+    "haltMinutes": 5,
+    "isHalt": true
+  }
+]

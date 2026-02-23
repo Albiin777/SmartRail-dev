@@ -13,6 +13,9 @@ function Header({ onLoginClick }) {
   const location = useLocation();
   const navigate = useNavigate();
 
+  const isPaymentPage = location.pathname.startsWith('/payment');
+  const hideLabelNavbar = location.pathname.startsWith('/seat-layout') || location.pathname.startsWith('/passenger-details') || isPaymentPage;
+
   // Close dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(event) {
@@ -59,6 +62,10 @@ function Header({ onLoginClick }) {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  if (isPaymentPage) {
+    return null;
+  }
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -137,7 +144,7 @@ function Header({ onLoginClick }) {
         )}
       </header>
 
-      <LabelNavbar hidden={hidden} setHidden={setHidden} />
+      {!hideLabelNavbar && <LabelNavbar hidden={hidden} setHidden={setHidden} />}
     </>
   );
 }

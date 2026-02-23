@@ -149,7 +149,10 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
 
                     {/* Logout Button */}
                     <button
-                        onClick={() => window.location.href = 'http://localhost:5173/?logout=true'}
+                        onClick={async () => {
+                            await import("../supabaseClient").then(({ supabase }) => supabase.auth.signOut());
+                            window.location.href = "/login";
+                        }}
                         className="mt-4 w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white transition-colors text-xs font-bold uppercase tracking-widest"
                     >
                         {collapsed ? <FiLogOut size={16} /> : (

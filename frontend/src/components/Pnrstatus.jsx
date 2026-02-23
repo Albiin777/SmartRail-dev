@@ -1,11 +1,23 @@
 import { useState, useEffect, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import LabelNavbar from "./LabelNavbar";
 import PNRResult from "./Pnrresult";
+import api from "../services/api";
 
 export default function PNRStatus() {
+  const location = useLocation();
   const [pnr, setPnr] = useState("");
   const [showResult, setShowResult] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [pnrData, setPnrData] = useState(null);
+  const [error, setError] = useState(null);
+
+  // Auto-fill PNR if navigated from payment success
+  useEffect(() => {
+    if (location.state?.pnr) {
+      setPnr(location.state.pnr);
+    }
+  }, [location.state]);
 
   // 1. ADDED ACCESSIBILITY: Listen for "Enter" key globally
   useEffect(() => {
@@ -18,39 +30,50 @@ export default function PNRStatus() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [pnr, loading, showResult]);
 
-  // 2. ENHANCED DUMMY DATA: Now includes Fare, Distance, and Confirmation Logic
-  const dummyData = {
-    pnr: pnr,
-    trainName: "Sachkhand Express",
-    trainNumber: "12716",
-    class: "Third AC (3A)",
-    fromStation: "New Delhi",
-    fromCode: "NDLS",
-    toStation: "Aurangabad",
-    toCode: "AWB",
-    departureDate: "21 Apr 2024, 13:00",
-    arrivalDate: "22 Apr 2024, 09:40",
-    duration: "20h 40m",
-    distance: "1399 km",
-    totalFare: "₹1,630",
-    chartStatus: "Not Prepared",
-    passengers: [
-      { name: "Chander Kanta", booking: "CNF/B5/57", current: "CNF", isConfirmed: true },
-      { name: "Laxmi Jindal", booking: "CNF/B5/58", current: "CNF", isConfirmed: true },
-      { name: "Rajesh Jindal", booking: "RLWL/12", current: "CNF", isConfirmed: true },
-      { name: "Darshana Devi", booking: "RLWL/13", current: "RAC/2", isConfirmed: false },
-      { name: "Suresh Kumar", booking: "W/L 45", current: "W/L 12", isConfirmed: false },
-      { name: "Anita Rani", booking: "W/L 46", current: "W/L 13", isConfirmed: false },
-    ]
+  const handleCheckStatus = async () => {
+    if (pnr.length !== 10) return;
+
+    setLoading(true);
+    setError(null);
+    setPnrData(null);
+
+    try {
+      const data = await api.getBookingStatus(pnr);
+
+      // Transform API data to Component format
+      const transformedData = {
+        pnr: data.pnr,
+        trainName: data.trainName || "Express Train",
+        trainNumber: data.trainNumber,
+        class: data.classCode,
+        fromStation: data.source,
+        fromCode: data.source, // Using code as name fallback
+        toStation: data.destination,
+        toCode: data.destination,
+        departureDate: new Date(data.journeyDate).toLocaleDateString() + ", " + (data.departureTime || "00:00"),
+        arrivalDate: new Date(data.journeyDate).toLocaleDateString() + ", " + (data.arrivalTime || "00:00"), // Fallback same day
+        duration: data.duration || "N/A",
+        distance: "N/A", // Calculated on backend ideally
+        totalFare: "₹--", // Not in basic booking model yet
+        chartStatus: "Prepared",
+        passengers: data.passengers.map(p => ({
+          name: p.name,
+          booking: `${p.status}/${p.seatNumber || 'WL'}`,
+          current: p.status,
+          isConfirmed: p.status === 'CNF'
+        }))
+      };
+
+      setPnrData(transformedData);
+      setShowResult(true);
+    } catch (err) {
+      setError(err.message || "Failed to fetch PNR status");
+      setShowResult(false);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleCheckStatus = () => {
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      setShowResult(true);
-    }, 800);
-  };
   const handleChange = (e) => {
     const value = e.target.value.replace(/\D/g, "");
     if (value.length <= 10) setPnr(value);
@@ -61,6 +84,8 @@ export default function PNRStatus() {
   const resetToForm = () => {
     setShowResult(false);
     setPnr("");
+    setPnrData(null);
+    setError(null);
     // scroll to the pnr section and focus input after render
     requestAnimationFrame(() => {
       const el = document.getElementById('pnr-section');
@@ -69,16 +94,18 @@ export default function PNRStatus() {
     });
   };
 
+  const isStandalonePage = location.pathname === '/pnr-status';
+
   return (
     <>
-      <LabelNavbar />
+      {!isStandalonePage && <LabelNavbar />}
 
-      <div id="pnr-section" className="max-w-6xl mx-auto mt-28 px-4 pb-14 flex justify-center flex-col text-white">
+      <div id="pnr-section" className={`max-w-6xl mx-auto px-4 pb-14 flex justify-center flex-col text-white ${isStandalonePage ? 'mt-36' : 'mt-44'}`}>
 
         {!showResult ? (
           <>
             <div className="text-center lg:text-left">
-              <h2 className="text-4xl font-black tracking-tight uppercase">
+              <h2 className="text-4xl sm:text-5xl font-black tracking-tight uppercase">
                 {loading ? "Fetching Details..." : "Check PNR Status"}
               </h2>
               <p className="text-gray-400 mt-3 max-w-2xl mx-auto lg:mx-0 text-base leading-relaxed">
@@ -118,9 +145,20 @@ export default function PNRStatus() {
               </button>
             </div>
           </>
+        ) : error ? (
+          <div className="text-center py-20 animate-in fade-in zoom-in duration-500">
+            <h2 className="text-3xl font-black text-red-500 mb-4">SEARCH FAILED</h2>
+            <p className="text-gray-400 mb-8 max-w-md mx-auto">{error}</p>
+            <button
+              onClick={resetToForm}
+              className="px-8 py-3 bg-white/10 hover:bg-white/20 text-white rounded-full font-bold transition"
+            >
+              TRY AGAIN
+            </button>
+          </div>
         ) : (
           <PNRResult
-            pnrData={dummyData}
+            pnrData={pnrData}
             onReset={resetToForm}
           />
         )}

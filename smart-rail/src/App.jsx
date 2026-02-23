@@ -1,6 +1,10 @@
-import { Routes, Route } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Routes, Route, Navigate } from "react-router-dom";
 import { SmartRailProvider } from "./hooks/useSmartRail";
+import { supabase } from "./supabaseClient";
+
 import Layout from "./components/Layout";
+import LoginPage from "./pages/LoginPage";
 import HomePage from "./pages/HomePage";
 import InspectionPage from "./pages/InspectionPage";
 import PenaltyPage from "./pages/PenaltyPage";
@@ -15,11 +19,41 @@ import IncidentsPage from "./pages/IncidentsPage";
 import HandoverPage from "./pages/HandoverPage";
 import SeatManagementPage from "./pages/SeatManagementPage";
 
+function ProtectedRoute({ children }) {
+  const [session, setSession] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  if (loading) {
+    return <div className="min-h-screen bg-[#121212] flex items-center justify-center text-white">Loading...</div>;
+  }
+
+  if (!session) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
+}
+
 function App() {
   return (
     <SmartRailProvider>
       <Routes>
-        <Route element={<Layout />}>
+        <Route path="/login" element={<LoginPage />} />
+
+        <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
           <Route path="/" element={<HomePage />} />
           <Route path="/inspection" element={<InspectionPage />} />
           <Route path="/penalties" element={<PenaltyPage />} />

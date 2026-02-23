@@ -10,9 +10,11 @@ import Auth from "./components/Auth";
 import Support from "./pages/Support";
 import Results from "./pages/Results";
 import Reviews from "./components/Reviews";
+import PassengerDetails from "./pages/PassengerDetails";
 
-import { BrowserRouter as Router, Routes, Route, useNavigate } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from "react-router-dom";
 import SeatLayout from "./pages/SeatLayout";
+import PaymentGateway from "./pages/PaymentGateway";
 
 import { supabase } from "./supabaseClient";
 
@@ -158,6 +160,8 @@ export default function App() {
 
   const isDark = theme === "dark";
   const navigate = useNavigate();
+  const location = useLocation();
+  const isPaymentPage = location.pathname.startsWith('/payment');
 
   const swapStations = () => {
     const temp = fromStation;
@@ -200,7 +204,10 @@ export default function App() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       if (session?.user?.email?.toLowerCase().includes('tte')) {
-        window.location.href = 'http://localhost:5174/';
+        // Sign out from frontend so they don't have a confusing passive session here
+        supabase.auth.signOut().then(() => {
+          window.location.href = 'http://localhost:5174/login';
+        });
       }
     });
 
@@ -214,7 +221,9 @@ export default function App() {
 
       setUser(session?.user ?? null);
       if (session?.user?.email?.toLowerCase().includes('tte')) {
-        window.location.href = 'http://localhost:5174/';
+        supabase.auth.signOut().then(() => {
+          window.location.href = 'http://localhost:5174/login';
+        });
       }
     });
 
@@ -231,22 +240,11 @@ export default function App() {
     // 2. Immediate scroll to top
     window.scrollTo(0, 0);
 
-    // 3. Reliable reload detection and redirect
-    const isReload = (
-      (window.performance &&
-        window.performance.getEntriesByType &&
-        window.performance.getEntriesByType('navigation')[0]?.type === 'reload') ||
-      (window.performance && window.performance.navigation && window.performance.navigation.type === 1)
-    );
-
-    if (isReload) {
-      // Force navigation to home page on reload
-      navigate('/', { replace: true });
-    }
+    // 3. Removed global reload redirect so that specific pages can handle their own recovery / session storage via React Router state.
   }, []);
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-900 relative">
+    <div className="min-h-screen flex flex-col bg-[#0f172a] relative">
       <Header onLoginClick={() => setIsAuthOpen(true)} />
 
       {isAuthOpen && (
@@ -255,7 +253,7 @@ export default function App() {
         </div>
       )}
 
-      <div className="min-h-screen flex flex-col pt-[70px]">
+      <div className={`min-h-screen flex flex-col ${isPaymentPage ? '' : 'pt-[70px]'}`}>
         <main className="flex-grow">
           <Routes>
             <Route
@@ -264,7 +262,7 @@ export default function App() {
                 <>
                   <Hero />
                   <BookingCard />
-                  <div id="pnr-section" className="scroll-mt-[160px]">
+                  <div id="pnr-section" className="scroll-mt-[190px]">
                     <Pnrstatus />
                   </div>
                   <div id="reviews-section" className="scroll-mt-[140px]">
@@ -276,12 +274,17 @@ export default function App() {
             />
 
             <Route path="/results" element={<Results />} />
-            <Route path="/seat-layout" element={<SeatLayout />} />
+            <Route path="/seat-layout/:trainNumber/:classType" element={<SeatLayout />} />
+            <Route path="/passenger-details" element={<PassengerDetails />} />
+            <Route path="/payment" element={<PaymentGateway />} />
+            <Route path="/pnr-status" element={
+              <div className="min-h-screen bg-[#0f172a] pt-20">
+                <Pnrstatus />
+              </div>
+            } />
             <Route path="/support" element={<Support />} />
           </Routes>
         </main>
-
-        <Footer />
       </div>
     </div>
   );

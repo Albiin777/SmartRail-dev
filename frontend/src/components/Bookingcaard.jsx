@@ -1,9 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import lookupData from "../data/lookupData.json";
-
-const allStations = lookupData.stations;
-const allTrains = lookupData.trains;
+import api from "../services/api";
 
 export default function BookingCard() {
   const navigate = useNavigate();
@@ -73,27 +70,33 @@ export default function BookingCard() {
   const fetchStationSuggestions = (query, setter, showSetter) => {
     if (stationDebounceRef.current) clearTimeout(stationDebounceRef.current);
     if (!query || query.length < 2) { setter([]); return; }
-    stationDebounceRef.current = setTimeout(() => {
-      const q = query.toLowerCase();
-      const results = allStations.filter(s =>
-        s.name.toLowerCase().includes(q) || s.code.toLowerCase().includes(q)
-      ).slice(0, 10);
-      setter(results);
-      showSetter(results.length > 0);
-    }, 150);
+
+    stationDebounceRef.current = setTimeout(async () => {
+      try {
+        const results = await api.searchStations(query);
+        setter(results);
+        showSetter(results.length > 0);
+      } catch (err) {
+        console.error("Station search error", err);
+        setter([]);
+      }
+    }, 300);
   };
 
   const fetchTrainSuggestions = (query) => {
     if (trainDebounceRef.current) clearTimeout(trainDebounceRef.current);
     if (!query || query.length < 2) { setTrainSuggestions([]); return; }
-    trainDebounceRef.current = setTimeout(() => {
-      const q = query.toLowerCase();
-      const results = allTrains.filter(t =>
-        t.trainName.toLowerCase().includes(q) || t.trainNumber.includes(q)
-      ).slice(0, 8);
-      setTrainSuggestions(results);
-      setShowTrainSuggestions(results.length > 0);
-    }, 150);
+
+    trainDebounceRef.current = setTimeout(async () => {
+      try {
+        const results = await api.searchTrains(query);
+        setTrainSuggestions(results);
+        setShowTrainSuggestions(results.length > 0);
+      } catch (err) {
+        console.error("Train search error", err);
+        setTrainSuggestions([]);
+      }
+    }, 300);
   };
 
   /* ================= HELPERS ================= */
@@ -121,7 +124,7 @@ export default function BookingCard() {
         setError("Source and destination cannot be the same");
         return;
       }
-      navigate(`/results?mode=route&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&date=${selectedDate.toISOString()}&class=${travelClass}`);
+      navigate(`/results?mode=route&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&date=${selectedDate.toISOString()}&class=${travelClass}&passengers=${passengers}`);
     }
 
     if (searchMode === "train") {
@@ -318,16 +321,7 @@ export default function BookingCard() {
                 type="date"
                 value={selectedDate.toISOString().split("T")[0]}
                 onChange={(e) => setSelectedDate(new Date(e.target.value))}
-                className="
-      absolute
-      bottom-full
-      mb-[2px]
-      left-0
-      w-full
-      h-[44px]
-      opacity-0
-      cursor-pointer
-    "
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
               />
             </div>
 

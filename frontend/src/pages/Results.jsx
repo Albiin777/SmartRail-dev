@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import trainData from "../data/smartRailData.json";
-import seatLayoutData from "../data/SmartRailSeatLayoutFull.json";
+import api from "../services/api";
+import MiniFooter from "../components/MiniFooter";
 
 export default function Results() {
     const [searchParams] = useSearchParams();
@@ -9,6 +9,20 @@ export default function Results() {
 
     const [results, setResults] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [fareMap, setFareMap] = useState({});
+    const [availMap, setAvailMap] = useState({});
+
+    // Warn before reload
+    useEffect(() => {
+        const handleBeforeUnload = (e) => {
+            e.preventDefault();
+            e.returnValue = "Your data will be lost.";
+            return e.returnValue;
+        };
+        window.addEventListener("beforeunload", handleBeforeUnload);
+        return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+    }, []);
 
     // Parse query params
     const searchMode = searchParams.get("mode") || "route";
@@ -32,147 +46,182 @@ export default function Results() {
 
     useEffect(() => {
         setLoading(true);
-        // Simulate slight delay for "searching" feel
-        setTimeout(() => {
-            let filtered = [];
+        setError(null);
 
-            if (searchMode === "train") {
-                const q = trainQueryParam.toLowerCase();
-                filtered = trainData.filter(t =>
-                    (t.trainName && t.trainName.toLowerCase().includes(q)) ||
-                    (t.trainNumber && t.trainNumber.includes(q))
-                );
-            } else {
-                // Route Search
+        const fetchData = async () => {
+            try {
+                let filtered = [];
+                if (searchMode === "train") {
+                    const q = trainQueryParam;
+                    if (q) {
+                        const apiResults = await api.searchTrains(q);
+
+                        // Map API results
+                        filtered = apiResults.map(t => ({
+                            ...t,
+                            // Ensure frontend compatibility
+                            from_station_name: t.source,
+                            to_station_name: t.destination,
+                            departureTime: t.departureTime || "08:00", // Fallback
+                            arrivalTime: t.arrivalTime || "16:00",
+                            duration: t.duration || "8h 00m"
+                        }));
+                    }
+                } else {
+                    // Route Search
+                    // Extract code from "Name (Code)" or just use value
+                    const extract = (str) => {
+                        const match = str.match(/\(([^)]+)\)$/);
+                        return match ? match[1] : str;
+                    };
+                    const fromCode = extract(fromParam);
+                    const toCode = extract(toParam);
+
+                    if (fromCode && toCode) {
+                        const apiResults = await api.searchTrainsBetween(fromCode, toCode);
+
+                        // API returns filtered list already, but we can filter by day if needed
+                        if (dateParam) {
+                            const dateObj = new Date(dateParam);
+                            const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                            const shortDay = days[dateObj.getDay()];
+
+                            filtered = apiResults.filter(t =>
+                                !t.runningDays || t.runningDays.includes(shortDay)
+                            );
+                        } else {
+                            filtered = apiResults;
+                        }
+
+                        // Map to view model
+                        filtered = filtered.map(t => ({
+                            ...t,
+                            departureTime: t.fromStation?.departureTime || t.fromStation?.arrivalTime || "06:00",
+                            arrivalTime: t.toStation?.arrivalTime || t.toStation?.departureTime || "14:00",
+                            duration: "Calculating..." // Ideally from API
+                        }));
+                    }
+                }
+
+                // Filter out trains that have already departed if journey date is today
+                if (dateParam) {
+                    const journeyDate = new Date(dateParam);
+                    const now = new Date();
+                    const isToday = journeyDate.toDateString() === now.toDateString();
+
+                    if (isToday) {
+                        const currentMinutes = now.getHours() * 60 + now.getMinutes();
+                        filtered = filtered.filter(t => {
+                            const depTime = t.fromStation?.departureTime || t.departureTime || "00:00";
+                            const [h, m] = depTime.split(':').map(Number);
+                            const depMinutes = h * 60 + m;
+                            return depMinutes > currentMinutes;
+                        });
+                    }
+                }
+
+                setResults(filtered);
+
+                // Fetch fares and availability for all results
                 const fromCode = extractCode(fromParam);
                 const toCode = extractCode(toParam);
+                const apiPromises = filtered.map(async (t) => {
+                    let fares = null, distanceKm = null, availability = {};
 
-                if (fromCode && toCode) {
-                    const seenTrains = new Set();
+                    try {
+                        const fareData = await api.getFare(t.trainNumber, fromCode, toCode);
+                        fares = fareData.fares;
+                        distanceKm = fareData.distanceKm;
+                    } catch { }
 
-                    filtered = trainData.filter(t => {
-                        // 1. Deduplication
-                        if (seenTrains.has(t.trainNumber)) return false;
+                    try {
+                        const availData = await api.checkAvailability(t.trainNumber);
+                        availability = availData.availability || {};
+                    } catch { }
 
-                        if (!t.schedule) return false;
+                    return { trainNumber: t.trainNumber, fares, distanceKm, availability };
+                });
 
-                        const fromStation = t.schedule.find(s => s.stationCode === fromCode);
-                        const toStation = t.schedule.find(s => s.stationCode === toCode);
+                const combinedResults = await Promise.all(apiPromises);
 
-                        if (fromStation && toStation) {
-                            // Check direction (from comes before to)
-                            if (t.schedule.indexOf(fromStation) < t.schedule.indexOf(toStation)) {
-                                seenTrains.add(t.trainNumber);
-                                return true;
-                            }
-                        }
-                        return false;
-                    });
+                const fMap = {};
+                const aMap = {};
+                combinedResults.forEach(r => {
+                    fMap[r.trainNumber] = { fares: r.fares, distanceKm: r.distanceKm };
+                    aMap[r.trainNumber] = r.availability;
+                });
 
-                    // 2. Sort by Departure Time (Calculated)
-                    filtered.sort((a, b) => {
-                        const getDepTime = (train) => {
-                            const seed = train.trainNumber.split('').reduce((x, y) => x + y.charCodeAt(0), 0);
-                            const startHour = 4 + (seed % 18);
-                            const startMin = (seed * 7) % 60;
-
-                            let dist = 0;
-                            const f = train.schedule.find(s => s.stationCode === fromCode);
-                            if (f) dist = f.distanceFromSourceKm || 0;
-
-                            const avgSpeed = 45 + (seed % 25);
-                            const timeToSource = dist / avgSpeed;
-                            return (startHour * 60) + startMin + (timeToSource * 60);
-                        };
-                        return getDepTime(a) - getDepTime(b);
-                    });
-                }
+                setFareMap(fMap);
+                setAvailMap(aMap);
+            } catch (err) {
+                console.error("Failed to fetch trains:", err);
+                setError("Unable to load trains. Please try again.");
+            } finally {
+                setLoading(false);
             }
-
-            setResults(filtered);
-            setLoading(false);
-        }, 800);
-    }, [searchParams]);
-
-    // Real Availability Generator using SmartRailSeatLayoutFull.json
-    const getRealAvailability = (trainNo, classCode) => {
-        // Find the train in the layout data
-        const trainLayout = seatLayoutData.find(t => t.trainNumber === trainNo);
-
-        if (!trainLayout || !trainLayout.coaches) {
-            // Fallback if no layout data
-            return { status: "AVAILABLE", count: 100, color: "text-green-600" };
-        }
-
-        // Filter coaches by class code
-        const relevantCoaches = trainLayout.coaches.filter(c => c.classCode === classCode);
-
-        // Sum total seats
-        const totalSeats = relevantCoaches.reduce((sum, coach) => sum + (coach.totalSeats || 0), 0);
-
-        if (totalSeats > 0) {
-            return { status: "AVAILABLE", count: totalSeats, color: "text-green-600" };
-        }
-
-        return { status: "WAITING LIST", count: 50, color: "text-red-600" };
-    };
-
-    // Helper to calculate times based on distance
-    const calculateTimes = (train, fromCode, toCode) => {
-        // 1. Generate deterministic start time based on train number
-        const seed = train.trainNumber.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
-        const startHour = 4 + (seed % 18); // Starts between 04:00 and 22:00
-        const startMin = (seed * 7) % 60;
-
-        // 2. Schedule logic
-        let dist = train.distanceKm || 500; // Total run
-        let fromDist = 0;
-        let toDist = dist;
-
-        if (train.schedule) {
-            const f = train.schedule.find(s => s.stationCode === fromCode);
-            const t = train.schedule.find(s => s.stationCode === toCode);
-            if (f) fromDist = f.distanceFromSourceKm || 0;
-            if (t) toDist = t.distanceFromSourceKm || 0;
-        }
-
-        // 3. Calculate travel duration
-        // Avg speed varies slightly by train number hash (45-70 km/h)
-        const avgSpeed = 45 + (seed % 25);
-
-        // Time to reach Source Station from Origin
-        const timeToSource = fromDist / avgSpeed; // hours
-        // Time to reach Dest Station from Origin
-        const timeToDest = toDist / avgSpeed; // hours
-
-        // Real Departure Time (Origin Start + TimeToSource)
-        let depTotalMins = (startHour * 60) + startMin + (timeToSource * 60);
-        // Real Arrival Time (Origin Start + TimeToDest)
-        let arrTotalMins = (startHour * 60) + startMin + (timeToDest * 60);
-
-        // Format Helper
-        const formatTime = (totalMins) => {
-            const days = Math.floor(totalMins / (24 * 60));
-            const hours = Math.floor((totalMins % (24 * 60)) / 60);
-            const mins = Math.floor(totalMins % 60);
-            return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
         };
 
-        const durationMins = arrTotalMins - depTotalMins;
-        const durationStr = `${Math.floor(durationMins / 60)}h ${Math.floor(durationMins % 60)}m`;
+        fetchData();
+    }, [searchMode, trainQueryParam, fromParam, toParam, dateParam]);
 
+    // Mock Availability Generator
+    const getRealAvailability = (trainNo, classCode) => {
+        // Deterministic mock based on train number
+        const seed = trainNo.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
+        const isAvailable = (seed % 10) > 2; // 70% chance available
+
+        if (isAvailable) {
+            const count = 20 + (seed % 100);
+            return { status: "AVAILABLE", count: count, color: "text-green-600" };
+        } else {
+            const wl = 1 + (seed % 50);
+            return { status: "WAITING LIST", count: wl, color: "text-red-600" };
+        }
+    };
+
+    // Helper to calculate times/duration from API response
+    const calculateTimes = (train, exactDistanceKm) => {
+        if (train.fromStation && train.toStation) {
+            // Use API provided station details
+            const dep = train.fromStation.departureTime || train.fromStation.arrivalTime || "00:00";
+            const arr = train.toStation.arrivalTime || train.toStation.departureTime || "00:00";
+
+            // Calculate duration
+            const [depH, depM] = dep.split(':').map(Number);
+            const [arrH, arrM] = arr.split(':').map(Number);
+            let diffMins = (arrH * 60 + arrM) - (depH * 60 + depM);
+            if (diffMins < 0) diffMins += 24 * 60; // Next day
+
+            const hours = Math.floor(diffMins / 60);
+            const mins = diffMins % 60;
+            const duration = `${hours}h ${mins}m`;
+
+            // Use the accurate API backend distance from the matrix if available
+            let finalDist = 0;
+            if (exactDistanceKm) {
+                finalDist = Number(exactDistanceKm).toFixed(2);
+            } else {
+                const dist = (train.toStation.distanceFromSourceKm || 0) - (train.fromStation.distanceFromSourceKm || 0);
+                const rawDist = dist !== 0 ? Math.abs(dist) : Math.floor((diffMins / 60) * 55);
+                finalDist = Number(rawDist).toFixed(2);
+            }
+
+            return { departure: dep, arrival: arr, duration, distance: finalDist };
+        }
+
+        // Fallback or Train Search Mode
         return {
-            departure: formatTime(depTotalMins),
-            arrival: formatTime(arrTotalMins),
-            duration: durationStr,
-            distance: Math.floor(toDist - fromDist)
+            departure: train.departureTime || "06:00",
+            arrival: train.arrivalTime || "14:00",
+            duration: train.duration || "8h 00m",
+            distance: train.distance || 0
         };
     };
 
     return (
-        <div className="min-h-screen bg-gray-900 pb-10 text-gray-100">
+        <div className="min-h-screen bg-gray-900 pb-10 text-gray-100 relative">
             {/* Search Header - Seamless Dark Theme, No Blue Border */}
-            <div className="bg-gray-900 pt-8 pb-32 px-4">
+            <div className="bg-gray-900 pt-28 pb-32 px-4">
                 <div className="max-w-6xl mx-auto">
                     <button
                         onClick={() => navigate("/")}
@@ -187,7 +236,7 @@ export default function Results() {
                                 {searchMode === 'train' ? `Results for "${trainQueryParam}"` : `${fromParam.split('(')[0]} → ${toParam.split('(')[0]}`}
                             </h1>
                             <p className="text-gray-400">
-                                {results.length} trains found • {new Date(dateParam).toDateString()}
+                                {results.length} trains found • {new Date(dateParam || new Date()).toDateString()}
                             </p>
                         </div>
 
@@ -221,75 +270,68 @@ export default function Results() {
                 ) : (
                     <div className="space-y-6">
                         {results.map((train) => {
-                            let times = { departure: "06:00", arrival: "14:00", duration: "8h 00m", distance: 0 };
-
-                            if (searchMode === 'route') {
-                                const fromCode = extractCode(fromParam);
-                                const toCode = extractCode(toParam);
-                                times = calculateTimes(train, fromCode, toCode);
-                            }
+                            const exactDist = fareMap[train.trainNumber]?.distanceKm;
+                            const times = calculateTimes(train, exactDist);
 
                             return (
-                                <div key={train.trainNumber} className="bg-white rounded-2xl shadow-lg hover:shadow-2xl transition duration-300 overflow-hidden border border-gray-200 group">
-                                    <div className="p-6">
+                                <div key={train.trainNumber} className="bg-[#1D2332] rounded-2xl shadow-xl hover:shadow-2xl transition duration-300 overflow-hidden border border-white/5 group">
+                                    <div className="p-4 sm:p-6">
                                         {/* Top Row: Header */}
-                                        <div className="flex flex-col md:flex-row justify-between items-start mb-6 gap-4">
-                                            <div>
-                                                <div className="flex items-center gap-3 mb-1">
-                                                    <h3 className="text-xl font-bold text-gray-900">{train.trainName}</h3>
-                                                    <span className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded font-mono">#{train.trainNumber}</span>
+                                        <div className="flex flex-col sm:flex-row justify-between items-start mb-4 sm:mb-6 gap-3 sm:gap-4">
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex items-center gap-2 sm:gap-3 mb-1 flex-wrap">
+                                                    <h3 className="text-lg sm:text-xl font-bold text-white truncate">{train.trainName}</h3>
+                                                    <span className="bg-[#111] border border-gray-700 text-gray-300 text-[10px] sm:text-xs px-2 py-0.5 sm:py-1 rounded font-mono shrink-0">#{train.trainNumber}</span>
                                                 </div>
-                                                <p className="text-sm text-gray-500">{train.type} • Runs: {train.runningDays?.length ? train.runningDays.join(', ') : 'Daily'}</p>
+                                                <p className="text-xs sm:text-sm text-gray-400 truncate">{train.type || 'Express'} • Runs: {train.runningDays?.length ? train.runningDays.join(', ') : 'Daily'}</p>
                                             </div>
 
-                                            {/* For Route Search: Times on Light Background */}
-                                            {searchMode === 'route' && (
-                                                <div className="text-right w-full md:w-auto">
-                                                    <div className="flex justify-between md:justify-end items-center gap-6 text-gray-800">
-                                                        <div className="text-center">
-                                                            <div className="text-2xl font-bold">{times.departure}</div>
-                                                            <div className="text-xs text-gray-500 font-mono tracking-wider">{extractCode(fromParam)}</div>
+                                            {/* Times Display */}
+                                            <div className="w-full sm:w-auto">
+                                                <div className="flex justify-between sm:justify-end items-center gap-4 sm:gap-6 text-white">
+                                                    <div className="text-center min-w-0">
+                                                        <div className="text-xl sm:text-2xl font-bold">{times.departure}</div>
+                                                        <div className="text-[10px] sm:text-xs text-gray-400 font-mono tracking-wider truncate max-w-[100px] sm:max-w-none">{train.source || fromParam}</div>
+                                                    </div>
+                                                    <div className="flex flex-col items-center px-2 sm:px-4 shrink-0">
+                                                        <div className="text-[10px] sm:text-xs text-gray-500 mb-1">{times.duration}</div>
+                                                        <div className="w-12 sm:w-20 h-[2px] bg-gray-600 relative">
+                                                            <div className="absolute -top-1 right-0 w-2 h-2 border-t-2 border-r-2 border-gray-600 rotate-45"></div>
                                                         </div>
-                                                        <div className="flex flex-col items-center px-4">
-                                                            <div className="w-20 h-[2px] bg-gray-300 relative my-1">
-                                                                <div className="absolute -top-1 right-0 w-2 h-2 border-t-2 border-r-2 border-gray-300 rotate-45"></div>
-                                                            </div>
-                                                            <div className="text-xs text-gray-400">{times.duration}</div>
-                                                        </div>
-                                                        <div className="text-center">
-                                                            <div className="text-2xl font-bold">{times.arrival}</div>
-                                                            <div className="text-xs text-gray-500 font-mono tracking-wider">{extractCode(toParam)}</div>
-                                                        </div>
+                                                        <div className="text-[9px] sm:text-[10px] text-gray-500 mt-1">{times.distance} km</div>
+                                                    </div>
+                                                    <div className="text-center min-w-0">
+                                                        <div className="text-xl sm:text-2xl font-bold">{times.arrival}</div>
+                                                        <div className="text-[10px] sm:text-xs text-gray-400 font-mono tracking-wider truncate max-w-[100px] sm:max-w-none">{train.destination || toParam}</div>
                                                     </div>
                                                 </div>
-                                            )}
+                                            </div>
                                         </div>
 
-                                        {/* Classes & Availability - SCROLLABLE ON MOBILE */}
-                                        <div className="flex overflow-x-auto pb-4 gap-3 -mx-2 px-2 md:grid md:grid-cols-4 lg:grid-cols-6 md:pb-0 md:overflow-visible custom-scrollbar">
-                                            {["SL", "3A", "2A", "1A"].map(cls => {
-                                                const avail = getRealAvailability(train.trainNumber, cls);
+                                        {/* Availability - Horizontal scroll */}
+                                        <div className="flex gap-3 overflow-x-auto pb-2 custom-scrollbar">
+                                            {(fareMap[train.trainNumber]?.fares ? Object.keys(fareMap[train.trainNumber].fares) : ["SL", "3A", "2A", "1A"]).map(cls => {
+                                                // Fallback to mock generator only if backend doesn't have the layout mapped
+                                                const avail = availMap[train.trainNumber]?.[cls] || getRealAvailability(train.trainNumber, cls);
                                                 return (
-                                                    <div key={cls} className={`flex-shrink-0 w-32 md:w-auto rounded-xl border border-gray-300 bg-gray-200 p-3 flex flex-col justify-between cursor-pointer hover:border-orange-500/50 hover:bg-orange-100 transition relative overflow-hidden group/card`}>
-                                                        <div className="flex justify-between items-center mb-3 z-10">
-                                                            <span className="font-bold text-sm text-gray-800">{cls}</span>
-                                                            <span className="text-xs text-gray-600 font-medium">₹ {train.baseFares?.[cls] || 500}</span>
+                                                    <button
+                                                        key={cls}
+                                                        onClick={() => navigate(`/seat-layout/${train.trainNumber}/${cls}?date=${dateParam}&from=${fromParam}&to=${toParam}&passengers=${searchParams.get('passengers') || 1}`)}
+                                                        className={`rounded-xl border p-3 flex flex-col justify-between hover:scale-105 transition duration-200 text-left cursor-pointer min-w-[120px] sm:min-w-[140px] shrink-0
+                                                            ${avail.status === "AVAILABLE" ? "bg-green-500/10 border-green-500/30" : "bg-red-500/10 border-red-500/30"}
+                                                        `}
+                                                    >
+                                                        <div className="flex justify-between items-center mb-1">
+                                                            <span className="font-bold text-sm text-white">{cls}</span>
+                                                            <span className="text-xs text-gray-400">₹{fareMap[train.trainNumber]?.fares?.[cls] || '...'}</span>
                                                         </div>
-                                                        <div className={`text-sm font-bold ${avail.color} z-10`}>
-                                                            {avail.status} <span className="text-xs opacity-75 text-gray-700">({avail.count})</span>
+                                                        <div className={`text-sm font-bold ${avail.status === "AVAILABLE" ? "text-green-400" : "text-red-400"}`}>
+                                                            {avail.status} <span className="text-xs opacity-70">({avail.count})</span>
                                                         </div>
-                                                    </div>
+                                                    </button>
                                                 );
                                             })}
                                         </div>
-                                    </div>
-
-                                    {/* Actions */}
-                                    <div className="bg-gray-50 px-6 py-4 flex justify-between items-center border-t border-gray-100">
-                                        <button className="text-sm text-gray-500 hover:text-gray-900 font-medium transition">View Route</button>
-                                        <button className="bg-orange-600 hover:bg-orange-700 text-white px-8 py-2.5 rounded-lg font-semibold text-sm transition shadow-lg shadow-orange-900/20 active:scale-95">
-                                            Book Ticket
-                                        </button>
                                     </div>
                                 </div>
                             );
@@ -297,6 +339,7 @@ export default function Results() {
                     </div>
                 )}
             </div>
+            <MiniFooter />
         </div>
     );
 }
