@@ -2,13 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Hide scrollbar for horizontal scroll strips */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 :root {
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
   color-scheme: light dark;
   color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  background-color: #0f172a;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -24,7 +34,6 @@
 body {
   margin: 0;
   min-width: 320px;
-  margin-top: 100px;
   min-height: 100vh;
 }
 
@@ -39,24 +48,24 @@ body {
     background-color: #ffffff;
   }
 }
+
 @layer components {
   .navBtn {
-    @apply px-[18px] py-2 rounded-full text-[18px] font-semibold text-[#0f2f55]
-    bg-white/20 backdrop-blur-sm border border-[#0f2f5547]
-    transition hover:bg-[#0f2f55] hover:text-white hover:shadow-lg active:scale-95;
+    @apply px-[18px] py-2 rounded-full text-[18px] font-semibold text-[#0f2f55] bg-white/20 backdrop-blur-sm border border-[#0f2f5547] transition hover:bg-[#0f2f55] hover:text-white hover:shadow-lg active:scale-95;
   }
 
   .dropdownItem {
-    @apply px-3 py-2 rounded-lg font-medium text-[#0f2f55]
-    hover:bg-[#0f2f55] hover:text-white cursor-pointer;
+    @apply px-3 py-2 rounded-lg font-medium text-[#0f2f55] hover:bg-[#0f2f55] hover:text-white cursor-pointer;
   }
 }
+
 @layer utilities {
   @keyframes slide-in-left {
     from {
       transform: translateX(-40px);
       opacity: 0;
     }
+
     to {
       transform: translateX(0);
       opacity: 1;
@@ -68,6 +77,7 @@ body {
     will-change: transform, opacity;
   }
 }
+
 @layer components {
   .footer-title {
     @apply text-lg font-semibold text-[#4fc3f7] mb-5 pb-2 border-b-2 border-[#4fc3f7] inline-block;
@@ -86,14 +96,18 @@ body {
   }
 
   .socialIcon {
-    @apply w-10 h-10 flex items-center justify-center rounded-full
-    bg-white/10 text-white transition
-    hover:bg-[#4fc3f7] hover:-translate-y-1;
+    @apply w-10 h-10 flex items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-[#4fc3f7] hover:-translate-y-1;
   }
 }
+
 @keyframes marquee {
-  0% { transform: translateX(100%); }
-  100% { transform: translateX(-100%); }
+  0% {
+    transform: translateX(100%);
+  }
+
+  100% {
+    transform: translateX(-100%);
+  }
 }
 
 @media (max-width: 640px) {

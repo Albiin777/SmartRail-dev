@@ -1,0 +1,5 @@
+Error: Missing Supabase environment variables
+    at file:///C:/Users/joshu/Desktop/latest%20admin%20page%201/SmartRail-dev/backend/config/supabase.js:11:11
+    at ModuleJob.run (node:internal/modules/esm/module_job:413:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:660:26)
+    at async importModuleDynamicallyWrapper (node:internal/vm/module:525:15)

@@ -67,7 +67,7 @@ export default function Support({ autoScroll = true }) {
           return;
         }
 
-        const response = await fetch(`http://localhost:5000/api/complaints/${selectedComplaint.id}/replies`, {
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/complaints/${selectedComplaint.id}/replies`, {
           headers: {
             'Authorization': `Bearer ${session.access_token}`,
             'Content-Type': 'application/json'
@@ -277,15 +277,27 @@ export default function Support({ autoScroll = true }) {
       const imageUrls = await uploadImages(user.id);
 
       setSubmissionStatus("submitting");
-      const { error } = await supabase.from('complaints').insert({
-        user_id: user.id,
-        subject: complaintName,
-        description,
-        images: imageUrls,
-        status: 'open'
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Authentication session expired.");
+
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/complaints`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          subject: complaintName,
+          description,
+          images: imageUrls
+        })
       });
 
-      if (error) throw error;
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || "Failed to submit complaint.");
+      }
 
       setSubmissionStatus("success");
       setComplaintName("");

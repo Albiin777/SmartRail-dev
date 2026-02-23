@@ -4,6 +4,49 @@ import { supabase, supabaseAdmin } from '../config/supabase.js';
 const router = express.Router();
 
 // =====================================================
+// POST /api/complaints
+// Create a new complaint
+// =====================================================
+router.post('/', async (req, res) => {
+    try {
+        const { subject, description, images } = req.body;
+        const authHeader = req.headers.authorization;
+
+        if (!authHeader) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        const token = authHeader.replace('Bearer ', '');
+        const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+
+        if (userError || !user) {
+            return res.status(401).json({ error: 'Invalid token' });
+        }
+
+        const { data, error } = await supabaseAdmin
+            .from('complaints')
+            .insert({
+                user_id: user.id,
+                subject,
+                description,
+                images: images || [],
+                status: 'open'
+            })
+            .select()
+            .single();
+
+        if (error) {
+            throw error;
+        }
+
+        res.status(201).json({ complaint: data });
+    } catch (error) {
+        console.error('Error creating complaint:', error);
+        res.status(500).json({ error: 'Failed to create complaint' });
+    }
+});
+
+// =====================================================
 // GET /api/complaints/:complaintId/replies
 // Fetch all replies for a specific complaint
 // =====================================================

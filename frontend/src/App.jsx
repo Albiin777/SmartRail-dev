@@ -10,9 +10,11 @@ import Auth from "./components/Auth";
 import Support from "./pages/Support";
 import Results from "./pages/Results";
 import Reviews from "./components/Reviews";
+import PassengerDetails from "./pages/PassengerDetails";
 
-import { BrowserRouter as Router, Routes, Route, useNavigate } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from "react-router-dom";
 import SeatLayout from "./pages/SeatLayout";
+import PaymentGateway from "./pages/PaymentGateway";
 
 import { supabase } from "./supabaseClient";
 
@@ -158,6 +160,8 @@ export default function App() {
 
   const isDark = theme === "dark";
   const navigate = useNavigate();
+  const location = useLocation();
+  const isPaymentPage = location.pathname.startsWith('/payment');
 
   const swapStations = () => {
     const temp = fromStation;
@@ -181,16 +185,46 @@ export default function App() {
 
   // ✅ Supabase auth state listener
   useEffect(() => {
-    // Check for existing session
+    // Check for explicit logout from another app (like TTE portal)
+    const params = new URLSearchParams(window.location.search);
+    const isLogout = params.get('logout') === 'true';
+
+    if (isLogout) {
+      supabase.auth.signOut().then(() => {
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('user');
+        setUser(null);
+        // Clean up the URL without a full page reload so it doesn't loop
+        window.history.replaceState({}, document.title, "/");
+      });
+      return; // Exit early so we don't process further auth steps on this mount
+    }
+
+    // Check for existing session (only if NOT explicitly logging out)
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
+      if (session?.user?.email?.toLowerCase().includes('tte')) {
+        // Sign out from frontend so they don't have a confusing passive session here
+        supabase.auth.signOut().then(() => {
+          window.location.href = 'http://localhost:5174/login';
+        });
+      }
     });
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // If we are actively in the middle of logging out, don't trigger the login redirect
+      if (event === 'SIGNED_OUT') {
+        setUser(null);
+        return;
+      }
+
       setUser(session?.user ?? null);
-      // Remove auto-navigation to avoid refreshing/redirecting on window focus
-      // if (event === "SIGNED_IN") { ... } 
+      if (session?.user?.email?.toLowerCase().includes('tte')) {
+        supabase.auth.signOut().then(() => {
+          window.location.href = 'http://localhost:5174/login';
+        });
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -206,22 +240,11 @@ export default function App() {
     // 2. Immediate scroll to top
     window.scrollTo(0, 0);
 
-    // 3. Reliable reload detection and redirect
-    const isReload = (
-      (window.performance &&
-        window.performance.getEntriesByType &&
-        window.performance.getEntriesByType('navigation')[0]?.type === 'reload') ||
-      (window.performance && window.performance.navigation && window.performance.navigation.type === 1)
-    );
-
-    if (isReload) {
-      // Force navigation to home page on reload
-      navigate('/', { replace: true });
-    }
+    // 3. Removed global reload redirect so that specific pages can handle their own recovery / session storage via React Router state.
   }, []);
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-900 relative">
+    <div className="min-h-screen flex flex-col bg-[#0f172a] relative">
       <Header onLoginClick={() => setIsAuthOpen(true)} />
 
       {isAuthOpen && (
@@ -230,7 +253,7 @@ export default function App() {
         </div>
       )}
 
-      <div className="min-h-screen flex flex-col pt-[70px]">
+      <div className={`min-h-screen flex flex-col ${isPaymentPage ? '' : 'pt-[70px]'}`}>
         <main className="flex-grow">
           <Routes>
             <Route
@@ -239,7 +262,7 @@ export default function App() {
                 <>
                   <Hero />
                   <BookingCard />
-                  <div id="pnr-section" className="scroll-mt-[160px]">
+                  <div id="pnr-section" className="scroll-mt-[190px]">
                     <Pnrstatus />
                   </div>
                   <div id="reviews-section" className="scroll-mt-[140px]">
@@ -251,12 +274,17 @@ export default function App() {
             />
 
             <Route path="/results" element={<Results />} />
-            <Route path="/seat-layout" element={<SeatLayout />} />
+            <Route path="/seat-layout/:trainNumber/:classType" element={<SeatLayout />} />
+            <Route path="/passenger-details" element={<PassengerDetails />} />
+            <Route path="/payment" element={<PaymentGateway />} />
+            <Route path="/pnr-status" element={
+              <div className="min-h-screen bg-[#0f172a] pt-20">
+                <Pnrstatus />
+              </div>
+            } />
             <Route path="/support" element={<Support />} />
           </Routes>
         </main>
-
-        <Footer />
       </div>
     </div>
   );

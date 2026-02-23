@@ -1,6 +1,6 @@
 function Hero() {
   return (
-    <section className="relative w-full flex items-center justify-center text-center px-6 sm:px-10 md:px-16 py-5 sm:py-7 md:py-10 bg-transparent mt-[-40px] pt-[-20px]">
+    <section className="relative w-full flex items-center justify-center text-center px-6 sm:px-10 md:px-16 pt-24 pb-5 sm:pb-7 md:pb-10 bg-transparent">
 
       <div className="w-full max-w-6xl mx-auto">
 
