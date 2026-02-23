@@ -54,7 +54,18 @@ export default function Results() {
                 if (searchMode === "train") {
                     const q = trainQueryParam;
                     if (q) {
-                        const apiResults = await api.searchTrains(q);
+                        // Strip parenthetical train number if present, e.g. "Rajdhani Express (12431)" → "Rajdhani Express"
+                        const cleanName = q.replace(/\s*\([^)]*\)\s*$/, '').trim();
+                        // Also extract train number if present
+                        const numMatch = q.match(/\(([^)]+)\)$/);
+                        const trainNum = numMatch ? numMatch[1] : null;
+
+                        let apiResults = await api.searchTrains(cleanName);
+
+                        // If name search returned nothing, try by train number
+                        if (apiResults.length === 0 && trainNum) {
+                            apiResults = await api.searchTrains(trainNum);
+                        }
 
                         // Map API results
                         filtered = apiResults.map(t => ({

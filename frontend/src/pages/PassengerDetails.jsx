@@ -163,6 +163,14 @@ export default function PassengerDetails() {
           <div className="flex flex-col md:flex-row justify-between items-center relative z-10 px-2 sm:px-4 md:px-6 gap-4">
             <div className="text-center md:text-left">
               <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white mb-2">{train?.trainName} <span className="text-orange-500">#{train?.trainNumber}</span></h1>
+
+              {/* Journey Route */}
+              <div className="flex items-center justify-center md:justify-start gap-3 text-sm sm:text-base text-gray-200 mb-2">
+                <span className="font-semibold">{source || train?.source}</span>
+                <span className="text-gray-500">→</span>
+                <span className="font-semibold">{destination || train?.destination}</span>
+              </div>
+
               <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 sm:gap-3 text-xs sm:text-sm text-gray-400 font-mono">
                 <span className="bg-[#1D2332] text-gray-200 px-2 sm:px-3 py-1 rounded-full border border-gray-700">{classType} Class</span>
                 <span>•</span>
@@ -253,16 +261,20 @@ export default function PassengerDetails() {
               <div className="space-y-3 mb-6">
                 <div className="flex justify-between text-sm text-gray-400">
                   <span>Ticket Fare (x{passengers.length})</span>
-                  <span>₹{passengers.length * 500}</span>
+                  <span>₹{farePerPerson * passengers.length}</span>
                 </div>
                 <div className="flex justify-between text-sm text-gray-400">
-                  <span>Service Charge</span>
+                  <span>Service Tax (5%)</span>
+                  <span>₹{Math.round(farePerPerson * passengers.length * 0.05)}</span>
+                </div>
+                <div className="flex justify-between text-sm text-gray-400">
+                  <span>Convenience Fee</span>
                   <span>₹20</span>
                 </div>
                 <div className="h-px bg-gray-700 my-2"></div>
                 <div className="flex justify-between font-bold text-white text-lg">
                   <span>Total</span>
-                  <span>₹{passengers.length * 500 + 20}</span>
+                  <span>₹{farePerPerson * passengers.length + Math.round(farePerPerson * passengers.length * 0.05) + 20}</span>
                 </div>
               </div>
 
