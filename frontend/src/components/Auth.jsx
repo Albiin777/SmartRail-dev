@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { supabase } from "../supabaseClient";
+import { supabase } from "../utils/supabaseClient";
 import { X, ArrowRight, Loader2, User, Calendar, Phone, Mail, CheckCircle2, Lock, Eye, EyeOff, Timer, ChevronDown } from "lucide-react";
 
 export default function Auth({ onClose }) {

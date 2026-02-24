@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import api from "../services/api";
-import MiniFooter from "../components/MiniFooter";
+import api from "../api/train.api";
+import MiniFooter from "../components/common/MiniFooter";
 
 // Helper Component for Seat
 function SeatButton({ seat, isSelected, onClick }) {
@@ -54,31 +54,28 @@ export default function SeatLayout() {
     const [isEditingPassengers, setIsEditingPassengers] = useState(false);
     const [farePerPerson, setFarePerPerson] = useState(0);
 
-    // Warn before reload
-    useEffect(() => {
-        const handleBeforeUnload = (e) => {
-            e.preventDefault();
-            e.returnValue = "Your data will be lost.";
-            return e.returnValue;
-        };
-        window.addEventListener("beforeunload", handleBeforeUnload);
-        return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-    }, []);
+    // (Removed beforeunload prompt so user can reload freely)
 
     useEffect(() => {
         const fetchData = async () => {
             try {
                 setLoading(true);
-                // Quick fetch for basic details
-                const details = await api.getTrainDetails(trainNumber);
-                setTrainDetails(details);
-
-                // Fetch Seat Layout
+                // First try to load seat layout blueprint
                 const data = await api.getSeatLayout(trainNumber);
 
+                // Then lazily grab train details to populate the header (Train Name) if it wasn't pre-loaded
+                let nameFallback = null;
+                try {
+                    const details = await api.getTrainDetails(trainNumber);
+                    if (details && details.data) {
+                        setTrainDetails(details.data);
+                        nameFallback = details.data.trainName;
+                    }
+                } catch (e) { /* ignore */ }
+
                 if (data && data.coaches) {
-                    // Filter relevant coaches if classType is specified
-                    const filtered = data.coaches.filter(c => c.classCode === classType);
+                    // Try to filter by requested class type
+                    let filtered = data.coaches.filter(c => c.classCode === classType);
 
                     // If no exact match (sometimes data mismatch), fallback to all or 1st
                     const displayCoaches = filtered.length > 0 ? filtered : data.coaches;
@@ -89,7 +86,15 @@ export default function SeatLayout() {
                         coachId: c.coachId || c.coachNumber
                     }));
 
-                    setLayoutData({ ...data, coaches: normalizedCoaches });
+                    // Ensure train name makes it into layoutData if missing
+                    const finalData = { ...data, coaches: normalizedCoaches };
+                    if (!finalData.trainName && nameFallback) {
+                        finalData.trainName = nameFallback;
+                    }
+
+                    setLayoutData(finalData);
+                    if (!trainDetails) setTrainDetails(finalData);
+
                     if (normalizedCoaches.length > 0) setSelectedCoachId(normalizedCoaches[0].coachId);
                 }
 
@@ -173,12 +178,16 @@ export default function SeatLayout() {
                     <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center relative z-10 px-2 sm:px-4 md:px-6 gap-6 lg:gap-4">
                         <div className="flex-[1.5] w-full">
                             <div className="flex flex-wrap items-baseline gap-2 sm:gap-4 mb-3">
-                                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white shrink-0">{trainDetails?.trainName || "Express Train"}</h1>
-                                <div className="text-lg sm:text-xl md:text-2xl font-bold text-gray-300 flex items-center gap-2 shrink-0">
-                                    <span>{source?.split(' ')[0]}</span>
-                                    <span className="text-gray-500">→</span>
-                                    <span>{destination?.split(' ')[0]}</span>
-                                </div>
+                                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white shrink-0">
+                                    {trainDetails?.trainName || (loading ? "Loading Train..." : "Express Train")}
+                                </h1>
+                                {source && destination && source !== "null" && destination !== "null" && (
+                                    <div className="text-lg sm:text-xl md:text-2xl font-bold text-gray-300 flex items-center gap-2 shrink-0">
+                                        <span>{source.split(' ')[0]}</span>
+                                        <span className="text-gray-500">→</span>
+                                        <span>{destination.split(' ')[0]}</span>
+                                    </div>
+                                )}
                             </div>
                             <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-gray-400 font-mono text-xs sm:text-sm">
                                 <span className="bg-[#1D2332] text-gray-200 px-2 sm:px-3 py-1 rounded-full border border-gray-700">
@@ -266,121 +275,142 @@ export default function SeatLayout() {
                     </div>
                 </div>
 
-                <div className="flex flex-col lg:flex-row gap-8">
-
-                    {/* Coach Selector - Mobile: horizontal scroll strip */}
-                    <div className="lg:hidden mb-4">
-                        <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-3 ml-1">Select Coach</h3>
-                        <div className="flex gap-2 overflow-x-auto pb-2 snap-x snap-mandatory scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}>
-                            {layoutData?.coaches?.map(coach => (
-                                <button
-                                    key={coach.coachId}
-                                    onClick={() => setSelectedCoachId(coach.coachId)}
-                                    style={{ backgroundColor: selectedCoachId === coach.coachId ? '#4ab86d' : '#383838' }}
-                                    className={`flex-shrink-0 snap-center px-4 py-2 rounded-full text-sm font-bold transition-all duration-200 flex items-center gap-2 ${selectedCoachId === coach.coachId
-                                        ? "text-white shadow-lg"
-                                        : "text-gray-300 hover:text-white"
-                                        }`}
-                                >
-                                    <span className="font-mono">{coach.coachId}</span>
-                                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${selectedCoachId === coach.coachId ? "bg-white/20 text-white" : "bg-white/10 text-gray-400"}`}>
-                                        {coach.seats?.filter(s => !s.isBooked).length}
-                                    </span>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Coach Selector - Desktop: vertical sidebar */}
-                    <div className="hidden lg:block lg:w-1/4">
-                        <div className="bg-[#1D2332] rounded-2xl p-4 sticky top-24 border border-white/5 shadow-xl">
-                            <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-4 ml-2">Select Coach</h3>
-                            <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+                {layoutData?.coaches && layoutData.coaches.length > 0 ? (
+                    <div className="flex flex-col lg:flex-row gap-8">
+                        {/* Coach Selector - Mobile: horizontal scroll strip */}
+                        <div className="lg:hidden mb-4">
+                            <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-3 ml-1">Select Coach</h3>
+                            <div className="flex gap-2 overflow-x-auto pb-2 snap-x snap-mandatory scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}>
                                 {layoutData?.coaches?.map(coach => (
                                     <button
                                         key={coach.coachId}
                                         onClick={() => setSelectedCoachId(coach.coachId)}
                                         style={{ backgroundColor: selectedCoachId === coach.coachId ? '#4ab86d' : '#383838' }}
-                                        className={`w-full text-left px-4 py-3 rounded-xl transition-all duration-200 flex justify-between items-center group ${selectedCoachId === coach.coachId
-                                            ? "text-white border border-green-400 shadow-md"
-                                            : "text-gray-300 hover:text-white border border-gray-600"
+                                        className={`flex-shrink-0 snap-center px-4 py-2 rounded-full text-sm font-bold transition-all duration-200 flex items-center gap-2 ${selectedCoachId === coach.coachId
+                                            ? "text-white shadow-lg"
+                                            : "text-gray-300 hover:text-white"
                                             }`}
                                     >
-                                        <span className="font-mono font-bold">{coach.coachId}</span>
-                                        <span className={`text-xs px-2 py-0.5 rounded ${selectedCoachId === coach.coachId ? "bg-white/20 text-white" : "bg-white/10 text-gray-400"}`}>
+                                        <span className="font-mono">{coach.coachId}</span>
+                                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${selectedCoachId === coach.coachId ? "bg-white/20 text-white" : "bg-white/10 text-gray-400"}`}>
                                             {coach.seats?.filter(s => !s.isBooked).length}
                                         </span>
                                     </button>
                                 ))}
                             </div>
                         </div>
-                    </div>
 
-                    {/* Seat Map */}
-                    <div className="lg:w-3/4">
-                        <div className="bg-[#1D2332] border border-white/5 rounded-3xl p-8 min-h-[500px] shadow-2xl relative">
-                            <div className="absolute top-0 left-1/2 -translate-x-1/2 bg-[#383838] text-gray-400 px-6 py-1 rounded-b-lg text-xs font-bold uppercase tracking-widest border border-t-0 border-[#1D2332]">
-                                Engine Direction ↑
+                        {/* Coach Selector - Desktop: vertical sidebar */}
+                        <div className="hidden lg:block lg:w-1/4">
+                            <div className="bg-[#1D2332] rounded-2xl p-4 sticky top-24 border border-white/5 shadow-xl">
+                                <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-4 ml-2">Select Coach</h3>
+                                <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+                                    {layoutData?.coaches?.map(coach => (
+                                        <button
+                                            key={coach.coachId}
+                                            onClick={() => setSelectedCoachId(coach.coachId)}
+                                            style={{ backgroundColor: selectedCoachId === coach.coachId ? '#4ab86d' : '#383838' }}
+                                            className={`w-full text-left px-4 py-3 rounded-xl transition-all duration-200 flex justify-between items-center group ${selectedCoachId === coach.coachId
+                                                ? "text-white border border-green-400 shadow-md"
+                                                : "text-gray-300 hover:text-white border border-gray-600"
+                                                }`}
+                                        >
+                                            <span className="font-mono font-bold">{coach.coachId}</span>
+                                            <span className={`text-xs px-2 py-0.5 rounded ${selectedCoachId === coach.coachId ? "bg-white/20 text-white" : "bg-white/10 text-gray-400"}`}>
+                                                {coach.seats?.filter(s => !s.isBooked).length}
+                                            </span>
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
+                        </div>
 
-                            {layoutData?.coaches?.find(c => c.coachId === selectedCoachId) ? (
-                                <div className="mt-8 flex flex-col items-center gap-6 max-w-2xl mx-auto">
-                                    {/* Group seats into bays of 8 for standard layout logic (1-8, 9-16, etc.) */}
-                                    {Array.from({ length: Math.ceil(layoutData.coaches.find(c => c.coachId === selectedCoachId).seats.length / 8) }).map((_, bayIndex) => {
-                                        const baySeats = layoutData.coaches.find(c => c.coachId === selectedCoachId).seats.slice(bayIndex * 8, (bayIndex + 1) * 8);
-
-                                        // Separate main bay seats (usually 1-6) and side seats (7-8)
-                                        const mainSeats = baySeats.slice(0, 6);
-                                        const sideSeats = baySeats.slice(6, 8);
-
-                                        return (
-                                            <div key={bayIndex} className="flex gap-8 md:gap-16 border-b border-gray-700/50 pb-6 last:border-0 items-center justify-center">
-
-                                                {/* Main Compartment: 3x2 grid */}
-                                                <div className="grid grid-cols-3 gap-3">
-                                                    {mainSeats.map(seat => {
-                                                        const seatId = `${selectedCoachId} -${seat.seatNumber} `;
-                                                        const isSelected = selectedSeats.some(s => s.uid === seatId);
-                                                        return (
-                                                            <SeatButton
-                                                                key={seat.seatNumber}
-                                                                seat={seat}
-                                                                isSelected={isSelected}
-                                                                onClick={() => toggleSeat(seat, selectedCoachId)}
-                                                            />
-                                                        );
-                                                    })}
-                                                </div>
-
-                                                {/* Aisle Gap */}
-
-                                                {/* Side Berths */}
-                                                <div className="grid grid-cols-1 gap-3 content-center border-l border-dashed border-gray-700/50 pl-8">
-                                                    {sideSeats.map(seat => {
-                                                        const seatId = `${selectedCoachId} -${seat.seatNumber} `;
-                                                        const isSelected = selectedSeats.some(s => s.uid === seatId);
-                                                        return (
-                                                            <SeatButton
-                                                                key={seat.seatNumber}
-                                                                seat={seat}
-                                                                isSelected={isSelected}
-                                                                onClick={() => toggleSeat(seat, selectedCoachId)}
-                                                            />
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
+                        {/* Seat Map */}
+                        <div className="lg:w-3/4">
+                            <div className="bg-[#1D2332] border border-white/5 rounded-3xl p-8 min-h-[500px] shadow-2xl relative">
+                                <div className="absolute top-0 left-1/2 -translate-x-1/2 bg-[#383838] text-gray-400 px-6 py-1 rounded-b-lg text-xs font-bold uppercase tracking-widest border border-t-0 border-[#1D2332]">
+                                    Engine Direction ↑
                                 </div>
-                            ) : (
-                                <div className="flex items-center justify-center h-full text-gray-400">
-                                    Select a coach to view seats
-                                </div>
-                            )}
+
+                                {layoutData?.coaches?.find(c => c.coachId === selectedCoachId) ? (
+                                    <div className="mt-8 flex flex-col items-center gap-6 max-w-2xl mx-auto">
+                                        {/* Group seats into bays of 8 for standard layout logic (1-8, 9-16, etc.) */}
+                                        {Array.from({ length: Math.ceil(layoutData.coaches.find(c => c.coachId === selectedCoachId).seats.length / 8) }).map((_, bayIndex) => {
+                                            const baySeats = layoutData.coaches.find(c => c.coachId === selectedCoachId).seats.slice(bayIndex * 8, (bayIndex + 1) * 8);
+
+                                            // Separate main bay seats (usually 1-6) and side seats (7-8)
+                                            const mainSeats = baySeats.slice(0, 6);
+                                            const sideSeats = baySeats.slice(6, 8);
+
+                                            return (
+                                                <div key={bayIndex} className="flex gap-8 md:gap-16 border-b border-gray-700/50 pb-6 last:border-0 items-center justify-center">
+
+                                                    {/* Main Compartment: 3x2 grid */}
+                                                    <div className="grid grid-cols-3 gap-3">
+                                                        {mainSeats.map(seat => {
+                                                            const seatId = `${selectedCoachId} -${seat.seatNumber} `;
+                                                            const isSelected = selectedSeats.some(s => s.uid === seatId);
+                                                            return (
+                                                                <SeatButton
+                                                                    key={seat.seatNumber}
+                                                                    seat={seat}
+                                                                    isSelected={isSelected}
+                                                                    onClick={() => toggleSeat(seat, selectedCoachId)}
+                                                                />
+                                                            );
+                                                        })}
+                                                    </div>
+
+                                                    {/* Aisle Gap */}
+
+                                                    {/* Side Berths */}
+                                                    <div className="grid grid-cols-1 gap-3 content-center border-l border-dashed border-gray-700/50 pl-8">
+                                                        {sideSeats.map(seat => {
+                                                            const seatId = `${selectedCoachId}-${seat.seatNumber}`;
+                                                            const isSelected = selectedSeats.some(s => s.uid === seatId);
+                                                            return (
+                                                                <SeatButton
+                                                                    key={seat.seatNumber}
+                                                                    seat={seat}
+                                                                    isSelected={isSelected}
+                                                                    onClick={() => toggleSeat(seat, selectedCoachId)}
+                                                                />
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center justify-center h-full text-gray-400 py-20">
+                                        Select a coach to view seats
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
-                </div>
+                ) : (
+                    <div className="bg-[#1D2332] border border-white/5 rounded-3xl p-8 sm:p-12 text-center shadow-2xl relative min-h-[400px] flex flex-col items-center justify-center gap-4">
+                        <div className="w-20 h-20 bg-gray-800 rounded-full flex items-center justify-center mb-2">
+                            <span className="text-4xl">🚂</span>
+                        </div>
+                        <h2 className="text-2xl font-bold text-white">General Availability Search</h2>
+                        <p className="text-gray-400 max-w-md mx-auto">
+                            To view interactive seat layouts, please search for a specific route between two stations on the home page.
+                        </p>
+
+                        {/* Display availability indicator if we had one, or a disabled button */}
+                        <div className="mt-8">
+                            <button
+                                onClick={() => navigate('/')}
+                                className="px-6 py-3 bg-[#4ab86d] text-white font-bold rounded-xl hover:bg-green-600 transition shadow-lg"
+                            >
+                                Search Routes
+                            </button>
+                        </div>
+                    </div>
+                )}
 
                 {/* Footer Actions */}
                 <div className="fixed bottom-0 left-0 right-0 bg-[#1D2332]/95 backdrop-blur-md border-t border-white/5 p-4 z-50">

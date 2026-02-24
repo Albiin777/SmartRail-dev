@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import "./App.css";
 
-import Header from "./components/Header";
-import Footer from "./components/Footer";
+import Header from "./components/common/Header";
+import Footer from "./components/common/Footer";
 import Hero from "./components/Hero";
 import BookingCard from "./components/Bookingcaard";
 import Pnrstatus from "./components/Pnrstatus";   // ✅ CORRECT
@@ -16,7 +16,7 @@ import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from
 import SeatLayout from "./pages/SeatLayout";
 import PaymentGateway from "./pages/PaymentGateway";
 
-import { supabase } from "./supabaseClient";
+import { supabase } from "./utils/supabaseClient";
 
 /* ==================== Icon Components ==================== */
 function SearchIcon({ size = 20, className = "" }) {
@@ -286,6 +286,8 @@ export default function App() {
           </Routes>
         </main>
       </div>
+
+      {!isPaymentPage && <Footer />}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import api from "../services/api";
+import api from "../api/train.api";
 
 export default function BookingCard() {
   const navigate = useNavigate();
@@ -29,7 +29,6 @@ export default function BookingCard() {
   const [filters, setFilters] = useState({
     acOnly: false,
     confirmed: false,
-    ladies: false,
     tatkal: false,
   });
 
@@ -47,7 +46,13 @@ export default function BookingCard() {
   const trainDebounceRef = useRef(null);
 
   /* ================= EFFECTS ================= */
-  useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    setMounted(true);
+
+    const handleSwitchTrainMode = () => setSearchMode("train");
+    window.addEventListener("switchToTrainMode", handleSwitchTrainMode);
+    return () => window.removeEventListener("switchToTrainMode", handleSwitchTrainMode);
+  }, []);
 
   useEffect(() => {
     const handler = (e) => {
@@ -132,7 +137,17 @@ export default function BookingCard() {
         setError("Please enter train name or number");
         return;
       }
-      navigate(`/results?mode=train&q=${encodeURIComponent(trainQuery)}`);
+      // Extract the 5 digit number from "Train Name (12345)" or just "12345"
+      const match = trainQuery.match(/\((\d+)\)$/);
+      const extractedNumber = match ? match[1] : trainQuery.replace(/\D/g, '');
+
+      if (!extractedNumber || extractedNumber.length !== 5) {
+        setError("Please select a specific train from the dropdown");
+        return;
+      }
+
+      // Navigate directly to Seat Layout bypassing Results
+      navigate(`/seat-layout/${extractedNumber}/${travelClass}?date=${selectedDate.toISOString()}&passengers=${passengers}`);
     }
 
     setError("");
@@ -140,7 +155,7 @@ export default function BookingCard() {
 
   /* ================= JSX ================= */
   return (
-    <div className="relative max-w-6xl mx-auto mt-2 md:mt-3 lg:mt-4 px-4">
+    <div id="booking-card" className="relative max-w-6xl mx-auto mt-2 md:mt-3 lg:mt-4 px-4 scroll-mt-32">
 
       <div
         className={`
@@ -205,7 +220,7 @@ export default function BookingCard() {
 
                 {/* TRAIN SUGGESTIONS DROPDOWN */}
                 {showTrainSuggestions && trainSuggestions.length > 0 && (
-                  <div className="absolute left-0 right-0 top-full mt-2 bg-white rounded-xl shadow-lg z-50 border border-[#D4D4D4] max-h-60 overflow-y-auto">
+                  <div className="absolute left-0 right-0 top-full mt-2 bg-white rounded-xl shadow-lg z-[99] border border-[#D4D4D4] max-h-60 overflow-y-auto">
                     {trainSuggestions.map((train, idx) => (
                       <div
                         key={idx}
@@ -302,27 +317,27 @@ export default function BookingCard() {
               </>
             )}
 
-            {/* DATE (CALENDAR OPENS ABOVE WITH 2px GAP) */}
-            <div ref={dateRef} className="relative md:col-span-2 lg:col-span-1">
-
-              {/* Visible Date Card */}
-              <div
-                className="bg-[#F5F5F5] rounded-xl px-4 py-4 cursor-pointer"
-                onClick={() => dateRef.current?.querySelector("input")?.showPicker()}
-              >
-                <label className="text-[11px] text-[#6B6B6B]">Date</label>
-                <div className="text-sm font-semibold text-[#242424] mt-1">
+            {/* DATE */}
+            <div className="relative md:col-span-2 lg:col-span-1">
+              <label className="flex flex-col bg-[#F5F5F5] rounded-xl px-4 py-4 cursor-pointer relative overflow-hidden">
+                <span className="text-[11px] text-[#6B6B6B]">Date</span>
+                <span className="text-sm font-semibold text-[#242424] mt-1 relative z-10">
                   {formatDate(selectedDate)}
-                </div>
-              </div>
+                </span>
 
-              {/* Hidden Date Input (controls calendar position) */}
-              <input
-                type="date"
-                value={selectedDate.toISOString().split("T")[0]}
-                onChange={(e) => setSelectedDate(new Date(e.target.value))}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-              />
+                {/* Hidden Date Input styling WebKit native icon to cover full bounds */}
+                <input
+                  type="date"
+                  value={selectedDate.toISOString().split("T")[0]}
+                  onChange={(e) => setSelectedDate(new Date(e.target.value))}
+                  onClick={(e) => {
+                    try {
+                      e.target.showPicker();
+                    } catch (err) { }
+                  }}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                />
+              </label>
             </div>
 
 
@@ -344,13 +359,12 @@ export default function BookingCard() {
               {[
                 ["AC Only", "acOnly"],
                 ["Confirmed Seats", "confirmed"],
-                ["Ladies Quota", "ladies"],
                 ["Tatkal", "tatkal"],
               ].map(([label, key]) => (
                 <button
                   key={key}
                   onClick={() => setFilters({ ...filters, [key]: !filters[key] })}
-                  className={`px-3 md:px-4 py-2.5 rounded-full border text-xs md:text-sm transition
+                  className={`flex-1 md:flex-none px-2 md:px-4 py-2.5 rounded-full border text-xs md:text-sm text-center transition whitespace-nowrap
                     ${filters[key]
                       ? "bg-[#242424] text-white border-[#242424]"
                       : "bg-white text-[#242424] border-[#B3B3B3]"

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import api from "../services/api";
-import MiniFooter from "../components/MiniFooter";
+import api from "../api/train.api";
+import MiniFooter from "../components/common/MiniFooter";
 
 export default function Results() {
     const [searchParams] = useSearchParams();
@@ -13,16 +13,7 @@ export default function Results() {
     const [fareMap, setFareMap] = useState({});
     const [availMap, setAvailMap] = useState({});
 
-    // Warn before reload
-    useEffect(() => {
-        const handleBeforeUnload = (e) => {
-            e.preventDefault();
-            e.returnValue = "Your data will be lost.";
-            return e.returnValue;
-        };
-        window.addEventListener("beforeunload", handleBeforeUnload);
-        return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-    }, []);
+    // (Removed beforeunload prompt so user can reload freely)
 
     // Parse query params
     const searchMode = searchParams.get("mode") || "route";
@@ -78,7 +69,7 @@ export default function Results() {
                     const toCode = extract(toParam);
 
                     if (fromCode && toCode) {
-                        const apiResults = await api.searchTrainsBetween(fromCode, toCode);
+                        const apiResults = await api.searchTrainsBetween(fromCode, toCode, dateParam);
 
                         // API returns filtered list already, but we can filter by day if needed
                         if (dateParam) {
@@ -104,7 +95,8 @@ export default function Results() {
                 }
 
                 // Filter out trains that have already departed if journey date is today
-                if (dateParam) {
+                // For Train Mode, skip aggressive time filtering to always show the train
+                if (dateParam && searchMode !== "train") {
                     const journeyDate = new Date(dateParam);
                     const now = new Date();
                     const isToday = journeyDate.toDateString() === now.toDateString();
@@ -123,13 +115,14 @@ export default function Results() {
                 setResults(filtered);
 
                 // Fetch fares and availability for all results
-                const fromCode = extractCode(fromParam);
-                const toCode = extractCode(toParam);
                 const apiPromises = filtered.map(async (t) => {
                     let fares = null, distanceKm = null, availability = {};
 
+                    const fCode = searchMode === "train" ? extractCode(t.source) : extractCode(fromParam);
+                    const tCode = searchMode === "train" ? extractCode(t.destination) : extractCode(toParam);
+
                     try {
-                        const fareData = await api.getFare(t.trainNumber, fromCode, toCode);
+                        const fareData = await api.getFare(t.trainNumber, fCode, tCode);
                         fares = fareData.fares;
                         distanceKm = fareData.distanceKm;
                     } catch { }
@@ -313,10 +306,13 @@ export default function Results() {
                                             {(fareMap[train.trainNumber]?.fares ? Object.keys(fareMap[train.trainNumber].fares) : ["SL", "3A", "2A", "1A"]).map(cls => {
                                                 // Fallback to mock generator only if backend doesn't have the layout mapped
                                                 const avail = availMap[train.trainNumber]?.[cls] || getRealAvailability(train.trainNumber, cls);
+                                                const navFrom = searchMode === 'train' ? train.source : fromParam;
+                                                const navTo = searchMode === 'train' ? train.destination : toParam;
+
                                                 return (
                                                     <button
                                                         key={cls}
-                                                        onClick={() => navigate(`/seat-layout/${train.trainNumber}/${cls}?date=${dateParam}&from=${fromParam}&to=${toParam}&passengers=${searchParams.get('passengers') || 1}`)}
+                                                        onClick={() => navigate(`/seat-layout/${train.trainNumber}/${cls}?date=${dateParam}&from=${navFrom}&to=${navTo}&passengers=${searchParams.get('passengers') || 1}`)}
                                                         className={`rounded-xl border p-3 flex flex-col justify-between hover:scale-105 transition duration-200 text-left cursor-pointer min-w-[120px] sm:min-w-[140px] shrink-0
                                                             ${avail.status === "AVAILABLE" ? "bg-green-500/10 border-green-500/30" : "bg-red-500/10 border-red-500/30"}
                                                         `}

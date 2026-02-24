@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import LabelNavbar from "./LabelNavbar";
 import PNRResult from "./Pnrresult";
-import api from "../services/api";
+import api from "../api/train.api";
 
 export default function PNRStatus() {
   const location = useLocation();

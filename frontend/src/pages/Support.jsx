@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Upload, X, FileText, Image as ImageIcon, CheckCircle2, History, Loader2, AlertCircle, Trash2 } from "lucide-react";
-import { supabase, getCurrentUser } from "../supabaseClient";
+import { supabase, getCurrentUser } from "../utils/supabaseClient";
 
 export default function Support({ autoScroll = true }) {
   const [files, setFiles] = useState([]);

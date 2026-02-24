@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import api from "../services/api";
-import MiniFooter from "../components/MiniFooter";
+import api from "../api/train.api";
+import MiniFooter from "../components/common/MiniFooter";
 import { QRCodeSVG } from "qrcode.react";
 
 export default function PaymentGateway() {
@@ -12,6 +12,7 @@ export default function PaymentGateway() {
     const [selectedMethod, setSelectedMethod] = useState("card");
     const [processing, setProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
+    const [failed, setFailed] = useState(false);
     const [showTicket, setShowTicket] = useState(false);
     const [bookingResult, setBookingResult] = useState(null);
     const [cardDetails, setCardDetails] = useState({
@@ -20,6 +21,13 @@ export default function PaymentGateway() {
         expiry: "",
         cvv: "",
     });
+    const [upiId, setUpiId] = useState("");
+    const [selectedBank, setSelectedBank] = useState("");
+
+    // Scroll to top on mount
+    useEffect(() => {
+        window.scrollTo(0, 0);
+    }, []);
 
     // Warn before reload
     useEffect(() => {
@@ -88,6 +96,15 @@ export default function PaymentGateway() {
         // Processing waits 3 seconds
         await new Promise((resolve) => setTimeout(resolve, 3000));
 
+        // Simulate 30% chance of payment failure, or forced failure if name is 'fail'
+        const isFailure = Math.random() < 0.3 || (selectedMethod === 'card' && cardDetails.name.toLowerCase().includes('fail'));
+
+        if (isFailure) {
+            setProcessing(false);
+            setFailed(true);
+            return;
+        }
+
         try {
             const result = await api.createBooking(payload);
             setBookingResult(result);
@@ -103,6 +120,73 @@ export default function PaymentGateway() {
             alert("Payment failed: " + (err.message || "Unknown error"));
         }
     };
+
+    const isFormValid = () => {
+        if (selectedMethod === "card") {
+            return cardDetails.number.length >= 16 &&
+                cardDetails.name.length > 2 &&
+                cardDetails.expiry.length === 5 &&
+                cardDetails.cvv.length === 3;
+        }
+        if (selectedMethod === "upi") {
+            // Check if it's a loosely valid UPI ID (e.g., name@bank)
+            return upiId.length > 3 && upiId.includes('@');
+        }
+        if (selectedMethod === "netbanking") {
+            return selectedBank !== "";
+        }
+        return false;
+    };
+
+    // Failure Screen
+    if (failed) {
+        return (
+            <div className="min-h-screen relative flex flex-col items-center justify-center overflow-hidden" style={{ backgroundColor: '#0f172a' }}>
+                <style>
+                    {`
+                        @keyframes popIn {
+                            0% { transform: scale(0); opacity: 0; }
+                            70% { transform: scale(1.1); }
+                            100% { transform: scale(1); opacity: 1; }
+                        }
+                        .fail-icon {
+                            animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+                        }
+                    `}
+                </style>
+                <div className="w-24 h-24 rounded-full flex items-center justify-center shadow-2xl mb-6 bg-red-500 fail-icon z-20">
+                    <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </div>
+
+                <h1 className="text-3xl font-bold text-white mb-3 z-20">Payment Failed</h1>
+                <p className="text-gray-400 text-center max-w-md mb-8 px-6 z-20">
+                    Your transaction could not be completed at this time due to a bank timeout or network issue.
+                    <br /><br />
+                    <span className="text-orange-400 font-medium">If money has been deducted from your account, it will be automatically refunded within 3-5 business days.</span>
+                </p>
+
+                <div className="flex gap-4 z-20 flex-col sm:flex-row w-full max-w-xs sm:max-w-md px-6">
+                    <button
+                        onClick={() => {
+                            setFailed(false);
+                            setProcessing(false);
+                        }}
+                        className="bg-transparent border border-red-500 text-red-400 font-bold py-3 px-8 rounded-xl hover:bg-red-500/10 transition duration-300 w-full"
+                    >
+                        Try Again
+                    </button>
+                    <button
+                        onClick={() => navigate("/")}
+                        className="bg-gray-700 text-white font-bold py-3 px-8 rounded-xl shadow-lg hover:bg-gray-600 transition duration-300 w-full"
+                    >
+                        Cancel Booking
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     // Success Screen
     if (success) {
@@ -269,16 +353,12 @@ export default function PaymentGateway() {
     ];
 
     return (
-        <div className="min-h-screen pt-20 pb-20 px-4 font-sans text-gray-100 relative" style={{ backgroundColor: '#0f172a' }}>
+        <div className="min-h-screen pt-[78px] pb-20 px-4 font-sans text-gray-100 relative" style={{ backgroundColor: '#0f172a' }}>
             <div className="max-w-4xl mx-auto">
 
                 {/* Header */}
-                <div className="text-center mb-6">
-                    <h1 className="text-5xl font-bold text-white mb-1">Confirm Payment</h1>
-                    <div className="flex items-center justify-center gap-2 mt-3">
-                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#4ab86d' }}></div>
-                        <span className="text-xs text-gray-500">256-bit SSL Encrypted</span>
-                    </div>
+                <div className="text-center mb-6 mt-[-2px]">
+                    <h1 className="text-5xl font-bold text-white">Confirm Payment</h1>
                 </div>
 
                 {/* Warning Banner */}
@@ -318,7 +398,7 @@ export default function PaymentGateway() {
                         {selectedMethod === "card" && (
                             <div className="rounded-2xl p-6 border border-white/5" style={{ backgroundColor: '#2B2B2B' }}>
                                 <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400 mb-4">Card Details</h3>
-                                <div className="space-y-4">
+                                <div className="space-y-3">
                                     <div className="space-y-1">
                                         <label className="text-xs text-gray-400 ml-1">Card Number</label>
                                         <input
@@ -378,6 +458,8 @@ export default function PaymentGateway() {
                                     <input
                                         type="text"
                                         placeholder="yourname@upi"
+                                        value={upiId}
+                                        onChange={(e) => setUpiId(e.target.value)}
                                         className="w-full rounded-lg px-4 py-3 border border-gray-600 focus:outline-none focus:border-gray-400 text-white placeholder-gray-600"
                                         style={{ backgroundColor: '#1a1a1a' }}
                                     />
@@ -398,8 +480,12 @@ export default function PaymentGateway() {
                                     {["SBI", "HDFC", "ICICI", "Axis", "PNB", "BOB"].map((bank) => (
                                         <button
                                             key={bank}
-                                            className="p-3 rounded-lg text-sm text-gray-300 border border-gray-600 hover:border-gray-400 hover:text-white transition-all"
-                                            style={{ backgroundColor: '#1a1a1a' }}
+                                            onClick={() => setSelectedBank(bank)}
+                                            className={`p-3 rounded-lg text-sm transition-all border ${selectedBank === bank
+                                                ? "border-green-500 text-white"
+                                                : "text-gray-300 border-gray-600 hover:border-gray-400 hover:text-white"
+                                                }`}
+                                            style={{ backgroundColor: selectedBank === bank ? '#1a3320' : '#1a1a1a' }}
                                         >
                                             {bank} Bank
                                         </button>
@@ -458,8 +544,9 @@ export default function PaymentGateway() {
 
                             <button
                                 onClick={handlePay}
-                                className="w-full text-white font-bold py-3 rounded-xl shadow-lg transition duration-300 flex justify-center items-center gap-2 text-lg"
-                                style={{ backgroundColor: '#4ab86d' }}
+                                disabled={!isFormValid()}
+                                className={`w-full text-white font-bold py-3 rounded-xl shadow-lg transition duration-300 flex justify-center items-center gap-2 text-lg ${!isFormValid() ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                style={{ backgroundColor: !isFormValid() ? '#4b5563' : '#4ab86d' }}
                             >
                                 Pay ₹{totalAmount}
                             </button>

@@ -1,6 +1,4 @@
--- Add Aadhar column to passengers table
-ALTER TABLE IF EXISTS public.passengers 
-ADD COLUMN IF NOT EXISTS aadhar TEXT;
+-- Aadhar dropped from requirements
 
 -- Verify or create passengers table if it doesn't exist (Backup for clean setup)
 CREATE TABLE IF NOT EXISTS public.pnr_bookings (
@@ -27,7 +25,6 @@ CREATE TABLE IF NOT EXISTS public.passengers (
     racNumber integer,
     wlNumber integer,
     berthPreference text,
-    aadhar text,          -- Encrypted Text
     created_at timestamptz DEFAULT now()
 );
 

@@ -114,10 +114,23 @@ function LabelNavbar({ hidden, setHidden }) {
           scrollbar-hide
         "
       >
-        <Link to="/seat-layout" className={navItem}>
+        <button onClick={(e) => {
+          e.preventDefault();
+          window.dispatchEvent(new Event("switchToTrainMode"));
+          if (window.location.pathname !== "/") {
+            navigate("/");
+            setTimeout(() => {
+              const el = document.getElementById("booking-card");
+              if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }, 80);
+          } else {
+            const el = document.getElementById("booking-card");
+            if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+          }
+        }} className={navItem}>
           Seat Availability
           <span className="absolute left-0 -bottom-1 h-[2px] w-0 bg-[#2B2B2B] transition-all duration-300 group-hover:w-full"></span>
-        </Link>
+        </button>
 
 
         <button onClick={goToPnrSection} className={navItem}>

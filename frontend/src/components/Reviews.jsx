@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Star, Search, ThumbsUp, CheckCircle2, Plus, X, ThumbsDown, Pencil, Image as ImageIcon, ChevronLeft, ChevronRight } from "lucide-react";
-import { supabase } from "../supabaseClient";
+import { supabase } from "../utils/supabaseClient";
 
 export default function Reviews() {
     const [searchQuery, setSearchQuery] = useState("");
