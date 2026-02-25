@@ -78,7 +78,7 @@ export default function Results() {
                             const shortDay = days[dateObj.getDay()];
 
                             filtered = apiResults.filter(t =>
-                                !t.runningDays || t.runningDays.includes(shortDay)
+                                !t.runningDays || t.runningDays.length === 0 || t.runningDays.includes(shortDay)
                             );
                         } else {
                             filtered = apiResults;

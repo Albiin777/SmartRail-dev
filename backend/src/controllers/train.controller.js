@@ -1,41 +1,21 @@
 
 import { dataStore } from '../services/train.service.js';
 import { generateSeats } from '../services/seatLayout.service.js';
-import { railradarFetch } from '../services/externalApi.service.js';
 
-const CACHE_TTL_MS = 10 * 60 * 1000;
-const cache = new Map();
+// Classes that are not bookable and should be hidden from seat layout/availability
+const NON_BOOKABLE = new Set(['SLR', 'PANTRY', 'GS', 'UR']);
 
-function getCached(key) {
-    const entry = cache.get(key);
-    if (!entry) return null;
-    if (Date.now() - entry.ts > CACHE_TTL_MS) {
-        cache.delete(key);
-        return null;
-    }
-    console.log(`[CACHE HIT] ${key}`);
-    return entry.data;
-}
-
-function setCache(key, data) {
-    cache.set(key, { data, ts: Date.now() });
-}
-
-// Original external API endpoints
+// External API endpoints fallback removed
 export async function getTrainDetails(req, res) {
-    // ... logic (left mostly intact but prioritized to local if available)
     try {
         const { trainNumber } = req.params;
         const train = dataStore.trains.find(t => t.trainNumber === trainNumber);
-        if (train) return res.json({ success: true, source: 'local', data: train });
 
-        const cacheKey = `train:${trainNumber}`;
-        const cached = getCached(cacheKey);
-        if (cached) return res.json({ success: true, source: 'cache', data: cached });
-
-        const data = await railradarFetch(`/trains/${trainNumber}`);
-        setCache(cacheKey, data);
-        return res.json({ success: true, source: 'api', data });
+        if (train) {
+            return res.json({ success: true, source: 'local', data: train });
+        } else {
+            return res.status(404).json({ success: false, error: 'Train not found in local database' });
+        }
     } catch (err) {
         return res.status(502).json({ success: false, error: err.message });
     }
@@ -45,15 +25,12 @@ export async function getTrainSchedule(req, res) {
     try {
         const { trainNumber } = req.params;
         const train = dataStore.trains.find(t => t.trainNumber === trainNumber);
-        if (train && train.schedule) return res.json({ success: true, source: 'local', data: train.schedule });
 
-        const cacheKey = `schedule:${trainNumber}`;
-        const cached = getCached(cacheKey);
-        if (cached) return res.json({ success: true, source: 'cache', data: cached });
-
-        const data = await railradarFetch(`/trains/${trainNumber}/schedule`);
-        setCache(cacheKey, data);
-        return res.json({ success: true, source: 'api', data });
+        if (train && train.schedule) {
+            return res.json({ success: true, source: 'local', data: train.schedule });
+        } else {
+            return res.status(404).json({ success: false, error: 'Train schedule not found in local database' });
+        }
     } catch (err) {
         return res.status(502).json({ success: false, error: err.message });
     }
@@ -99,61 +76,14 @@ export async function getTrainsBetween(req, res) {
             };
         });
 
-        // 2. Fetch live from RailRadar API
-        const cacheKey = `trainsBetween:${source}:${destination}:${date}`;
-        const cached = getCached(cacheKey);
-        let apiResults = cached || [];
-
-        if (!cached) {
-            try {
-                // Try to hit the RailRadar trains between stations endpoint
-                // Note: The exact RapidAPI route might vary (e.g., /trainsBetweenStations or /searchTrains)
-                const apiRes = await railradarFetch(`/trainsBetweenStations?fromStationCode=${source}&toStationCode=${destination}&dateOfJourney=${date}`);
-                if (apiRes && apiRes.data) {
-                    apiResults = Array.isArray(apiRes.data) ? apiRes.data : [];
-                    setCache(cacheKey, apiResults);
-                } else if (Array.isArray(apiRes)) {
-                    apiResults = apiRes;
-                    setCache(cacheKey, apiResults);
-                }
-            } catch (apiErr) {
-                console.warn("[RailRadar API Error in getTrainsBetween]", apiErr.message);
-            }
-        }
-
-        // 3. Merge Local + API results
-        const merged = [...mappedResults];
-        const existingNumbers = new Set(merged.map(t => t.trainNumber));
-
-        for (const t of apiResults) {
-            if (!existingNumbers.has(t.trainNumber)) {
-                merged.push({
-                    trainNumber: t.trainNumber,
-                    trainName: t.trainName || 'Express',
-                    trainSource: t.fromStationCode || t.source || 'Unknown',
-                    trainDestination: t.toStationCode || t.destination || 'Unknown',
-                    fromStation: {
-                        stationCode: source,
-                        departureTime: t.departureTime || "00:00"
-                    },
-                    toStation: {
-                        stationCode: destination,
-                        arrivalTime: t.arrivalTime || "00:00"
-                    },
-                    runningDays: t.runningDays || []
-                });
-                existingNumbers.add(t.trainNumber);
-            }
-        }
-
-        // 4. Sort chronologically
-        merged.sort((a, b) => {
+        // 2. Sort chronologically
+        mappedResults.sort((a, b) => {
             const timeA = a.fromStation?.departureTime || a.fromStation?.arrivalTime || "23:59";
             const timeB = b.fromStation?.departureTime || b.fromStation?.arrivalTime || "23:59";
             return timeA.localeCompare(timeB);
         });
 
-        return res.json(merged);
+        return res.json(mappedResults);
     } catch (err) {
         return res.status(502).json({ success: false, error: err.message });
     }
@@ -213,15 +143,28 @@ export async function getSeatLayout(req, res) {
     const layout = dataStore.seatLayouts.find(t => t.trainNumber === req.params.trainNumber);
     if (!layout) return res.status(404).json({ error: "Layout not found" });
 
-    const processedCoaches = layout.coaches.map(coach => {
-        if ((!coach.seats || coach.seats.length === 0) && coach.totalSeats > 0) {
+    const processedCoaches = layout.coaches
+        .filter(coach => !NON_BOOKABLE.has(coach.classCode))
+        .map(coach => {
+            // Resolve totalSeats from coachTypesMap if not inline
+            const coachType = coach.coachTypeId
+                ? dataStore.coachTypesMap.get(coach.coachTypeId)
+                : null;
+            const totalSeats = coach.totalSeats ?? coachType?.totalSeats ?? 0;
+
+            const seats = (coach.seats && coach.seats.length > 0)
+                ? coach.seats
+                : generateSeats(coach);
+
             return {
-                ...coach,
-                seats: generateSeats(coach)
+                coachId: coach.coachId || coach.coachNumber,
+                classCode: coach.classCode,
+                coachTypeId: coach.coachTypeId,
+                totalSeats,
+                seats
             };
-        }
-        return coach;
-    });
+        })
+        .filter(coach => coach.seats.length > 0);
 
     res.json({ ...layout, coaches: processedCoaches });
 }
@@ -233,27 +176,28 @@ export async function getAvailability(req, res) {
     }
 
     const availabilityMap = {};
-    layout.coaches.forEach(coach => {
-        const cls = coach.classCode;
-        if (!cls) return;
+    layout.coaches
+        .filter(coach => !NON_BOOKABLE.has(coach.classCode))
+        .forEach(coach => {
+            const cls = coach.classCode;
+            if (!cls) return;
 
-        if (!availabilityMap[cls]) {
-            availabilityMap[cls] = { total: 0, booked: 0, available: 0 };
-        }
+            if (!availabilityMap[cls]) {
+                availabilityMap[cls] = { total: 0, booked: 0, available: 0 };
+            }
 
-        let seats = coach.seats;
-        if ((!seats || seats.length === 0) && coach.totalSeats > 0) {
-            seats = generateSeats(coach);
-        }
+            const seats = (coach.seats && coach.seats.length > 0)
+                ? coach.seats
+                : generateSeats(coach);
 
-        if (seats && seats.length > 0) {
-            const total = seats.length;
-            const booked = seats.filter(s => s.isBooked).length;
-            availabilityMap[cls].total += total;
-            availabilityMap[cls].booked += booked;
-            availabilityMap[cls].available += (total - booked);
-        }
-    });
+            if (seats && seats.length > 0) {
+                const total = seats.length;
+                const booked = seats.filter(s => s.isBooked).length;
+                availabilityMap[cls].total += total;
+                availabilityMap[cls].booked += booked;
+                availabilityMap[cls].available += (total - booked);
+            }
+        });
 
     const availability = {};
     for (const [cls, stats] of Object.entries(availabilityMap)) {
@@ -308,12 +252,17 @@ export async function getFare(req, res) {
     // Calculate fares
     const fares = {};
 
-    // Get train layout to know which classes exist
+    // Get train layout to know which classes exist (exclude non-bookable)
     const layout = dataStore.seatLayouts.find(t => t.trainNumber === trainNumber);
 
     let classes = ['SL', '3A', '2A', '1A']; // Default
     if (layout) {
-        const layoutClasses = [...new Set(layout.coaches.map(c => c.classCode).filter(Boolean))];
+        const layoutClasses = [...new Set(
+            layout.coaches
+                .filter(c => !NON_BOOKABLE.has(c.classCode))
+                .map(c => c.classCode)
+                .filter(Boolean)
+        )];
         if (layoutClasses.length > 0) classes = layoutClasses;
     }
 

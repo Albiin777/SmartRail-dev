@@ -196,13 +196,6 @@
     "destination": "QLN"
   },
   {
-    "trainNumber": "06329",
-    "trainName": "Thiruvananthapuram Central - Mangaluru Jn Amrit Bharat Inaugural Special",
-    "type": "Amrit Bharat",
-    "source": "TVC",
-    "destination": "MAJN"
-  },
-  {
     "trainNumber": "12698",
     "trainName": "MGR Chennai Central Weekly SF Express",
     "type": "Superfast Express",
@@ -292,13 +285,6 @@
     "type": "EMU",
     "source": "QLN",
     "destination": "CAPE"
-  },
-  {
-    "trainNumber": "06083",
-    "trainName": "Nagercoil Junction - Madgaon Junction Passenger",
-    "type": "Passenger",
-    "source": "NCJ",
-    "destination": "MAO"
   },
   {
     "trainNumber": "12082",
@@ -418,13 +404,6 @@
     "type": "Superfast Express",
     "source": "TVC",
     "destination": "NZM"
-  },
-  {
-    "trainNumber": "04080",
-    "trainName": "Hazrat Nizamuddin - Thiruvananthapuram Central (Trivandrum) Passenger",
-    "type": "Passenger",
-    "source": "NZM",
-    "destination": "TVC"
   },
   {
     "trainNumber": "04580",
@@ -577,13 +556,6 @@
     "trainNumber": "17042",
     "trainName": "Charlapalli Amrit Bharat Express",
     "type": "Mail/Express",
-    "source": "TVCN",
-    "destination": "CHZ"
-  },
-  {
-    "trainNumber": "06308",
-    "trainName": "Thiruvananthapuram North - Charlapalli Amrit Bharat Inaugural Special",
-    "type": "Amrit Bharat",
     "source": "TVCN",
     "destination": "CHZ"
   },
@@ -868,13 +840,6 @@
     "destination": "ERS"
   },
   {
-    "trainNumber": "07194",
-    "trainName": "Hyderabad Special Fare Special",
-    "type": "Mail/Express",
-    "source": "QLN",
-    "destination": "HYB"
-  },
-  {
     "trainNumber": "07314",
     "trainName": "SSS Hubballi Special Fare Special",
     "type": "Mail/Express",
@@ -931,20 +896,6 @@
     "destination": "MS"
   },
   {
-    "trainNumber": "06112",
-    "trainName": "Kollam Junction (Quilon) - Chennai Egmore Passenger",
-    "type": "Passenger",
-    "source": "QLN",
-    "destination": "MS"
-  },
-  {
-    "trainNumber": "06118",
-    "trainName": "Kollam Junction (Quilon) - MGR Chennai Central Passenger",
-    "type": "Passenger",
-    "source": "QLN",
-    "destination": "MAS"
-  },
-  {
     "trainNumber": "06128",
     "trainName": "Kollam Junction (Quilon) - MGR Chennai Central Passenger",
     "type": "Passenger",
@@ -952,70 +903,7 @@
     "destination": "MAS"
   },
   {
-    "trainNumber": "07102",
-    "trainName": "Kollam Junction (Quilon) - Machilipatnam Passenger",
-    "type": "Passenger",
-    "source": "QLN",
-    "destination": "MTM"
-  },
-  {
-    "trainNumber": "07104",
-    "trainName": "Kollam Junction (Quilon) - Machilipatnam Passenger",
-    "type": "Passenger",
-    "source": "QLN",
-    "destination": "MTM"
-  },
-  {
-    "trainNumber": "07106",
-    "trainName": "Kollam Junction (Quilon) - Narasapur Passenger",
-    "type": "Passenger",
-    "source": "QLN",
-    "destination": "NS"
-  },
-  {
-    "trainNumber": "07108",
-    "trainName": "Kollam Junction (Quilon) - Charlapalli Passenger",
-    "type": "Passenger",
-    "source": "QLN",
-    "destination": "CHZ"
-  },
-  {
-    "trainNumber": "07114",
-    "trainName": "Kollam Junction (Quilon) - Charlapalli Passenger",
-    "type": "Passenger",
-    "source": "QLN",
-    "destination": "CHZ"
-  },
-  {
-    "trainNumber": "07118",
-    "trainName": "Kollam Junction (Quilon) - Charlapalli Passenger",
-    "type": "Passenger",
-    "source": "QLN",
-    "destination": "CHZ"
-  },
-  {
     "trainNumber": "07120",
-    "trainName": "Kollam Junction (Quilon) - Charlapalli Passenger",
-    "type": "Passenger",
-    "source": "QLN",
-    "destination": "CHZ"
-  },
-  {
-    "trainNumber": "07124",
-    "trainName": "Kollam Junction (Quilon) - Charlapalli Passenger",
-    "type": "Passenger",
-    "source": "QLN",
-    "destination": "CHZ"
-  },
-  {
-    "trainNumber": "07126",
-    "trainName": "Kollam Junction (Quilon) - Charlapalli Passenger",
-    "type": "Passenger",
-    "source": "QLN",
-    "destination": "CHZ"
-  },
-  {
-    "trainNumber": "07128",
     "trainName": "Kollam Junction (Quilon) - Charlapalli Passenger",
     "type": "Passenger",
     "source": "QLN",
@@ -1027,20 +915,6 @@
     "type": "Passenger",
     "source": "QLN",
     "destination": "NED"
-  },
-  {
-    "trainNumber": "07136",
-    "trainName": "Kollam Junction (Quilon) - Charlapalli Passenger",
-    "type": "Passenger",
-    "source": "QLN",
-    "destination": "CHZ"
-  },
-  {
-    "trainNumber": "08540",
-    "trainName": "Kollam Junction (Quilon) - Visakhapatnam Junction Passenger",
-    "type": "Passenger",
-    "source": "QLN",
-    "destination": "VSKP"
   },
   {
     "trainNumber": "12202",
@@ -1274,73 +1148,10 @@
     "destination": "QLN"
   },
   {
-    "trainNumber": "06107",
-    "trainName": "Chennai Egmore - Thiruvananthapuram North (Kochuveli) Passenger",
-    "type": "Passenger",
-    "source": "MS",
-    "destination": "TVCN"
-  },
-  {
-    "trainNumber": "06111",
-    "trainName": "Chennai Egmore - Kollam Junction (Quilon) Passenger",
-    "type": "Passenger",
-    "source": "MS",
-    "destination": "QLN"
-  },
-  {
     "trainNumber": "06117",
     "trainName": "MGR Chennai Central - Kollam Junction (Quilon) Passenger",
     "type": "Passenger",
     "source": "MAS",
-    "destination": "QLN"
-  },
-  {
-    "trainNumber": "06127",
-    "trainName": "MGR Chennai Central - Kollam Junction (Quilon) Passenger",
-    "type": "Passenger",
-    "source": "MAS",
-    "destination": "QLN"
-  },
-  {
-    "trainNumber": "06561",
-    "trainName": "SMVT Bengaluru - Kollam Junction (Quilon) Passenger",
-    "type": "Passenger",
-    "source": "SMVB",
-    "destination": "QLN"
-  },
-  {
-    "trainNumber": "07101",
-    "trainName": "Machilipatnam - Kollam Junction (Quilon) Passenger",
-    "type": "Passenger",
-    "source": "MTM",
-    "destination": "QLN"
-  },
-  {
-    "trainNumber": "07103",
-    "trainName": "Machilipatnam - Kollam Junction (Quilon) Passenger",
-    "type": "Passenger",
-    "source": "MTM",
-    "destination": "QLN"
-  },
-  {
-    "trainNumber": "07105",
-    "trainName": "Narasapur - Kollam Junction (Quilon) Passenger",
-    "type": "Passenger",
-    "source": "NS",
-    "destination": "QLN"
-  },
-  {
-    "trainNumber": "07107",
-    "trainName": "Charlapalli - Kollam Junction (Quilon) Passenger",
-    "type": "Passenger",
-    "source": "CHZ",
-    "destination": "QLN"
-  },
-  {
-    "trainNumber": "07113",
-    "trainName": "Charlapalli - Kollam Junction (Quilon) Passenger",
-    "type": "Passenger",
-    "source": "CHZ",
     "destination": "QLN"
   },
   {
@@ -1355,48 +1166,6 @@
     "trainName": "Charlapalli - Kollam Junction (Quilon) Passenger",
     "type": "Passenger",
     "source": "CHZ",
-    "destination": "QLN"
-  },
-  {
-    "trainNumber": "07123",
-    "trainName": "Hazur Sahib Nanded - Kollam Junction (Quilon) Passenger",
-    "type": "Passenger",
-    "source": "NED",
-    "destination": "QLN"
-  },
-  {
-    "trainNumber": "07125",
-    "trainName": "Narasapur - Kollam Junction (Quilon) Passenger",
-    "type": "Passenger",
-    "source": "NS",
-    "destination": "QLN"
-  },
-  {
-    "trainNumber": "07127",
-    "trainName": "Charlapalli - Kollam Junction (Quilon) Passenger",
-    "type": "Passenger",
-    "source": "CHZ",
-    "destination": "QLN"
-  },
-  {
-    "trainNumber": "07133",
-    "trainName": "Hazur Sahib Nanded - Kollam Junction (Quilon) Passenger",
-    "type": "Passenger",
-    "source": "NED",
-    "destination": "QLN"
-  },
-  {
-    "trainNumber": "07135",
-    "trainName": "Charlapalli - Kollam Junction (Quilon) Passenger",
-    "type": "Passenger",
-    "source": "CHZ",
-    "destination": "QLN"
-  },
-  {
-    "trainNumber": "08539",
-    "trainName": "Visakhapatnam Junction - Kollam Junction (Quilon) Passenger",
-    "type": "Passenger",
-    "source": "VSKP",
     "destination": "QLN"
   },
   {
@@ -1526,24 +1295,10 @@
     "destination": "TVCN"
   },
   {
-    "trainNumber": "20932",
-    "trainName": "Thiruvananthapuram North Weekly SF Express",
-    "type": "Superfast Express",
-    "source": "INDB",
-    "destination": "TVCN"
-  },
-  {
     "trainNumber": "22645",
     "trainName": "Ahilya Nagari SF Express",
     "type": "Superfast Express",
     "source": "INDB",
-    "destination": "TVCN"
-  },
-  {
-    "trainNumber": "22660",
-    "trainName": "Thiruvananthapuram North SF Express",
-    "type": "Superfast Express",
-    "source": "YNRK",
     "destination": "TVCN"
   },
   {

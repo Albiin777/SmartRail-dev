@@ -45,6 +45,8 @@ export default function SeatLayout() {
     const dateParam = searchParams.get("date");
     const journeyDate = dateParam ? dateParam.split("T")[0] : new Date().toISOString().split("T")[0];
 
+    const isTrainSearchMode = !source || !destination || source === "null" || destination === "null";
+
     const [loading, setLoading] = useState(true);
     const [layoutData, setLayoutData] = useState(null);
     const [selectedCoachId, setSelectedCoachId] = useState(null);
@@ -74,8 +76,19 @@ export default function SeatLayout() {
                 } catch (e) { /* ignore */ }
 
                 if (data && data.coaches) {
-                    // Try to filter by requested class type
-                    let filtered = data.coaches.filter(c => c.classCode === classType);
+                    // Extract short code if it's a formatted string like "Sleeper (SL)"
+                    let targetClass = classType;
+                    const match = classType.match(/\(([^)]+)\)$/);
+                    if (match) {
+                        targetClass = match[1];
+                    } else if (classType.toLowerCase() === "general") {
+                        // Sometimes general doesn't have a code in the UI dropdown
+                        // But mostly layout JSON might use GN or 2S for unreserved
+                        targetClass = "2S"; // Best fallback if no code
+                    }
+
+                    // Try to filter by requested class type (using the extracted code)
+                    let filtered = data.coaches.filter(c => c.classCode === targetClass);
 
                     // If no exact match (sometimes data mismatch), fallback to all or 1st
                     const displayCoaches = filtered.length > 0 ? filtered : data.coaches;
@@ -110,8 +123,11 @@ export default function SeatLayout() {
     // Fetch real fare
     useEffect(() => {
         if (!trainNumber || !classType) return;
-        const srcCode = source?.match(/\(([^)]+)\)$/)?.[1] || source;
-        const dstCode = destination?.match(/\(([^)]+)\)$/)?.[1] || destination;
+
+        // Use provided source/destination or use generic calculation
+        const srcCode = source ? (source.match(/\(([^)]+)\)$/)?.[1] || source) : null;
+        const dstCode = destination ? (destination.match(/\(([^)]+)\)$/)?.[1] || destination) : null;
+
         api.getFare(trainNumber, srcCode, dstCode)
             .then(data => {
                 if (data.fares && data.fares[classType]) {
@@ -122,7 +138,7 @@ export default function SeatLayout() {
     }, [trainNumber, classType, source, destination]);
 
     const toggleSeat = (seat, coachId) => {
-        if (seat.isBooked) return;
+        if (seat.isBooked || isTrainSearchMode) return;
 
         const seatId = `${coachId} -${seat.seatNumber} `;
         const isSelected = selectedSeats.some(s => s.uid === seatId);
@@ -181,11 +197,15 @@ export default function SeatLayout() {
                                 <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white shrink-0">
                                     {trainDetails?.trainName || (loading ? "Loading Train..." : "Express Train")}
                                 </h1>
-                                {source && destination && source !== "null" && destination !== "null" && (
+                                {source && destination && source !== "null" && destination !== "null" ? (
                                     <div className="text-lg sm:text-xl md:text-2xl font-bold text-gray-300 flex items-center gap-2 shrink-0">
                                         <span>{source.split(' ')[0]}</span>
                                         <span className="text-gray-500">→</span>
                                         <span>{destination.split(' ')[0]}</span>
+                                    </div>
+                                ) : (
+                                    <div className="text-lg sm:text-xl md:text-2xl font-bold text-gray-300 flex items-center gap-2 shrink-0">
+                                        <span>Seat Layout View</span>
                                     </div>
                                 )}
                             </div>
@@ -198,66 +218,68 @@ export default function SeatLayout() {
                                 <span className="text-white">{classType} Class</span>
                             </div>
                         </div>
-                        <div className="lg:border-l border-gray-700/50 lg:pl-6 text-left lg:text-right w-full lg:w-auto shrink-0 flex flex-row lg:flex-col justify-between lg:justify-center items-center lg:items-end">
-                            <span className="text-xs sm:text-sm text-gray-400 uppercase tracking-wide lg:mb-1">Passengers</span>
-                            {isEditingPassengers ? (
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        type="number"
-                                        min="1"
-                                        max="6"
-                                        value={passengerCount || ""}
-                                        onChange={(e) => {
-                                            const val = e.target.value;
-                                            if (val === "") {
-                                                setPassengerCount("");
-                                            } else {
-                                                let num = parseInt(val);
-                                                if (num > 6) num = 6;
-                                                setPassengerCount(num);
+                        {!isTrainSearchMode && (
+                            <div className="lg:border-l border-gray-700/50 lg:pl-6 text-left lg:text-right w-full lg:w-auto shrink-0 flex flex-row lg:flex-col justify-between lg:justify-center items-center lg:items-end">
+                                <span className="text-xs sm:text-sm text-gray-400 uppercase tracking-wide lg:mb-1">Passengers</span>
+                                {isEditingPassengers ? (
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            max="6"
+                                            value={passengerCount || ""}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                if (val === "") {
+                                                    setPassengerCount("");
+                                                } else {
+                                                    let num = parseInt(val);
+                                                    if (num > 6) num = 6;
+                                                    setPassengerCount(num);
 
-                                                // Trim extra seats if count is reduced below current selection
-                                                if (selectedSeats.length > num) {
-                                                    setSelectedSeats(seats => seats.slice(0, num));
+                                                    // Trim extra seats if count is reduced below current selection
+                                                    if (selectedSeats.length > num) {
+                                                        setSelectedSeats(seats => seats.slice(0, num));
+                                                    }
                                                 }
-                                            }
-                                        }}
-                                        onBlur={() => {
-                                            if (!passengerCount || passengerCount < 1) setPassengerCount(1);
-                                            // Auto-close when clicking outside
-                                            setTimeout(() => setIsEditingPassengers(false), 100);
-                                        }}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter') {
+                                            }}
+                                            onBlur={() => {
+                                                if (!passengerCount || passengerCount < 1) setPassengerCount(1);
+                                                // Auto-close when clicking outside
+                                                setTimeout(() => setIsEditingPassengers(false), 100);
+                                            }}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    if (!passengerCount || passengerCount < 1) setPassengerCount(1);
+                                                    setIsEditingPassengers(false);
+                                                }
+                                            }}
+                                            autoFocus
+                                            className="w-16 bg-[#1D2332] border border-gray-600 rounded px-2 py-1 text-white text-lg font-bold outline-none focus:border-[#4ab86d]"
+                                        />
+                                        <button
+                                            onClick={() => {
                                                 if (!passengerCount || passengerCount < 1) setPassengerCount(1);
                                                 setIsEditingPassengers(false);
-                                            }
-                                        }}
-                                        autoFocus
-                                        className="w-16 bg-[#1D2332] border border-gray-600 rounded px-2 py-1 text-white text-lg font-bold outline-none focus:border-[#4ab86d]"
-                                    />
-                                    <button
-                                        onClick={() => {
-                                            if (!passengerCount || passengerCount < 1) setPassengerCount(1);
-                                            setIsEditingPassengers(false);
-                                        }}
-                                        className="text-[#4ab86d] hover:text-white transition p-1"
-                                        title="Confirm"
-                                    >
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                            <polyline points="20 6 9 17 4 12"></polyline>
-                                        </svg>
-                                    </button>
-                                </div>
-                            ) : (
-                                <div className="flex items-center gap-2 text-2xl font-bold text-white group cursor-pointer" onClick={() => setIsEditingPassengers(true)}>
-                                    <span>{passengerCount}</span>
-                                    <span className="text-gray-500 opacity-50 group-hover:opacity-100 transition-opacity mt-1" title="Edit Passengers">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-                                    </span>
-                                </div>
-                            )}
-                        </div>
+                                            }}
+                                            className="text-[#4ab86d] hover:text-white transition p-1"
+                                            title="Confirm"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                <polyline points="20 6 9 17 4 12"></polyline>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-2 text-2xl font-bold text-white group cursor-pointer" onClick={() => setIsEditingPassengers(true)}>
+                                        <span>{passengerCount}</span>
+                                        <span className="text-gray-500 opacity-50 group-hover:opacity-100 transition-opacity mt-1" title="Edit Passengers">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     {/* Dashed Line */}
@@ -265,7 +287,9 @@ export default function SeatLayout() {
 
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-0 text-xs sm:text-sm text-gray-400 px-2 sm:px-4 md:px-6">
                         <div className="flex items-center gap-2">
-                            Selected: <span className="text-white font-bold text-base sm:text-lg">{selectedSeats.length}</span>
+                            {!isTrainSearchMode && (
+                                <>Selected: <span className="text-white font-bold text-base sm:text-lg">{selectedSeats.length}</span></>
+                            )}
                         </div>
                         <div className="flex flex-wrap gap-3 sm:gap-4">
                             <div className="flex items-center gap-1.5"><div className="w-3 h-3 sm:w-4 sm:h-4 rounded bg-transparent" style={{ border: '1px solid #4ab86d' }}></div> Available</div>
@@ -395,43 +419,44 @@ export default function SeatLayout() {
                         <div className="w-20 h-20 bg-gray-800 rounded-full flex items-center justify-center mb-2">
                             <span className="text-4xl">🚂</span>
                         </div>
-                        <h2 className="text-2xl font-bold text-white">General Availability Search</h2>
+                        <h2 className="text-2xl font-bold text-white">No layout found for this train/class</h2>
                         <p className="text-gray-400 max-w-md mx-auto">
-                            To view interactive seat layouts, please search for a specific route between two stations on the home page.
+                            We couldn't find the seat layout for the selected class. Try another class or route.
                         </p>
 
-                        {/* Display availability indicator if we had one, or a disabled button */}
                         <div className="mt-8">
                             <button
                                 onClick={() => navigate('/')}
                                 className="px-6 py-3 bg-[#4ab86d] text-white font-bold rounded-xl hover:bg-green-600 transition shadow-lg"
                             >
-                                Search Routes
+                                Go Back
                             </button>
                         </div>
                     </div>
                 )}
 
                 {/* Footer Actions */}
-                <div className="fixed bottom-0 left-0 right-0 bg-[#1D2332]/95 backdrop-blur-md border-t border-white/5 p-4 z-50">
-                    <div className="max-w-6xl mx-auto flex justify-between items-center">
-                        <div className="text-white">
-                            <div className="text-xs text-gray-400 uppercase font-medium">Total Amount</div>
-                            <div className="text-2xl font-bold">₹{selectedSeats.length * (farePerPerson || 0)}</div>
+                {!isTrainSearchMode && (
+                    <div className="fixed bottom-0 left-0 right-0 bg-[#1D2332]/95 backdrop-blur-md border-t border-white/5 p-4 z-50">
+                        <div className="max-w-6xl mx-auto flex justify-between items-center">
+                            <div className="text-white">
+                                <div className="text-xs text-gray-400 uppercase font-medium">Total Amount</div>
+                                <div className="text-2xl font-bold">₹{selectedSeats.length * (farePerPerson || 0)}</div>
+                            </div>
+                            <button
+                                onClick={handleProceed}
+                                disabled={selectedSeats.length !== passengerCount}
+                                style={{ backgroundColor: selectedSeats.length !== passengerCount ? '#4b5563' : '#e2e8f0' }}
+                                className={`px-8 py-3 rounded-xl font-bold transition shadow-lg flex items-center gap-2 ${selectedSeats.length !== passengerCount
+                                    ? 'text-gray-300 opacity-50 cursor-not-allowed'
+                                    : 'text-gray-900 hover:brightness-95'
+                                    }`}
+                            >
+                                CONTINUE <span className="text-xl">→</span>
+                            </button>
                         </div>
-                        <button
-                            onClick={handleProceed}
-                            disabled={selectedSeats.length !== passengerCount}
-                            style={{ backgroundColor: selectedSeats.length !== passengerCount ? '#4b5563' : '#e2e8f0' }}
-                            className={`px-8 py-3 rounded-xl font-bold transition shadow-lg flex items-center gap-2 ${selectedSeats.length !== passengerCount
-                                ? 'text-gray-300 opacity-50 cursor-not-allowed'
-                                : 'text-gray-900 hover:brightness-95'
-                                }`}
-                        >
-                            CONTINUE <span className="text-xl">→</span>
-                        </button>
                     </div>
-                </div>
+                )}
 
             </div>
             <MiniFooter />

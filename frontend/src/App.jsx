@@ -162,6 +162,7 @@ export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const isPaymentPage = location.pathname.startsWith('/payment');
+  const isSeatLayoutPage = location.pathname.startsWith('/seat-layout');
 
   const swapStations = () => {
     const temp = fromStation;
@@ -287,7 +288,7 @@ export default function App() {
         </main>
       </div>
 
-      {!isPaymentPage && <Footer />}
+      {!(isPaymentPage || isSeatLayoutPage) && <Footer />}
     </div>
   );
 }

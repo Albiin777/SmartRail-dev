@@ -4,13 +4,14 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const trainsDataPath = path.join(__dirname, '../../data', 'full_trains_database.json');
-const seatLayoutDataPath = path.join(__dirname, '../../data', 'SmartRailSeatLayoutFull.json');
-const coachTemplatesPath = path.join(__dirname, '../../data', 'coachTemplates.json');
+const seatLayoutDataPath = path.join(__dirname, '../../data', 'smartRailTrainsLayout.json');
+const coachTypesPath = path.join(__dirname, '../../data', 'coachTypes.json');
 
 const dataStore = {
     trains: [],
     seatLayouts: [],
-    coachTemplates: {},
+    // Map<coachTypeId, coachTypeEntry> — e.g. "SL-72" -> { totalSeats, layout: { rowStructure } }
+    coachTypesMap: new Map(),
     stationsMap: new Map()
 };
 
@@ -52,10 +53,14 @@ const loadData = () => {
             console.log(`[DataLoader] Loaded ${dataStore.seatLayouts.length} seat layouts.`);
         }
 
-        if (fs.existsSync(coachTemplatesPath)) {
-            const rawTemplates = fs.readFileSync(coachTemplatesPath, 'utf8');
-            dataStore.coachTemplates = JSON.parse(rawTemplates);
-            console.log(`[DataLoader] Loaded coach templates.`);
+        if (fs.existsSync(coachTypesPath)) {
+            const rawTypes = fs.readFileSync(coachTypesPath, 'utf8');
+            const coachTypesArray = JSON.parse(rawTypes);
+            dataStore.coachTypesMap.clear();
+            coachTypesArray.forEach(ct => {
+                dataStore.coachTypesMap.set(ct.coachTypeId, ct);
+            });
+            console.log(`[DataLoader] Loaded ${dataStore.coachTypesMap.size} coach types.`);
         }
 
     } catch (err) {
