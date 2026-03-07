@@ -185,7 +185,8 @@ const createBooking = async ({ trainNumber, journeyDate, classCode, source, dest
             status,
             seatNumber,
             racNumber,
-            wlNumber
+            wlNumber,
+            berthType: p.berthPreference || 'SEAT'
         });
     }
 
@@ -209,10 +210,13 @@ const createBooking = async ({ trainNumber, journeyDate, classCode, source, dest
     if (bookingError) throw new Error('Failed to create PNR record: ' + bookingError.message);
 
     // Insert Passengers with bookingIn
-    const passengersToInsert = passengerRecords.map(p => ({
-        ...p,
-        bookingId: bookingData.id
-    }));
+    const passengersToInsert = passengerRecords.map(p => {
+        const { berthType, ...rest } = p;
+        return {
+            ...rest,
+            bookingId: bookingData.id
+        }
+    });
 
     const { error: passengerError } = await supabase
         .from('passengers')
@@ -222,6 +226,32 @@ const createBooking = async ({ trainNumber, journeyDate, classCode, source, dest
         // Rollback (Manual since Supabase HTTP API doesn't support transactions easily without RPC)
         await supabase.from('pnr_bookings').delete().eq('id', bookingData.id);
         throw new Error('Failed to add passengers: ' + passengerError.message);
+    }
+
+    // NEW LOGIC: sync to passenger_details for Admin Visualizer
+    const adminDetailsToInsert = passengerRecords.filter(p => p.status === 'CNF' && p.seatNumber).map(p => {
+        const [coach, ...seatNumParts] = p.seatNumber.split('-');
+        const seat_number = seatNumParts.join('-') || p.seatNumber;
+
+        return {
+            pnr_number: pnr,
+            train_no: trainNumber,
+            date: journeyDate,
+            coach: coach || classCode,
+            seat_number: seat_number,
+            berth_type: p.berthType,
+            passenger_name: p.name,
+            passenger_age: p.age,
+            passenger_gender: p.gender,
+            booking_status: 'CONFIRMED'
+        };
+    });
+
+    if (adminDetailsToInsert.length > 0) {
+        // Fire and forget insert to keep Admin dashboard live 
+        await supabase.from('passenger_details').insert(adminDetailsToInsert).then(res => {
+            if (res.error) console.error("Admin visualizer sync error:", res.error);
+        });
     }
 
     return { pnr, status: passengerRecords[0].status, passengers: passengerRecords };
