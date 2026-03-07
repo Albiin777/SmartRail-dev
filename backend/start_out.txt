@@ -1,0 +1,6 @@
+[DataLoader] Loaded 233 trains.
+[DataLoader] Extracted 3554 unique stations.
+[DataLoader] Loaded 233 seat layouts.
+[DataLoader] Loaded coach templates.
+🚀 SmartRail Unified Server running on http://localhost:3000
+📍 Environment: development

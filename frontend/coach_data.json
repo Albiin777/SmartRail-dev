@@ -1,0 +1,128 @@
+[
+  {
+    "id": "0af1dd3c-2faf-4183-8030-4d5311b3a4bc",
+    "train_id": "dcef73c4-f81a-4d44-a279-7ac1c7b2f374",
+    "coach_id": "H1",
+    "coach_type": "1A",
+    "label": "H1 — First AC",
+    "position": 1,
+    "created_at": "2026-03-06T17:01:07.293123+00:00"
+  },
+  {
+    "id": "e0f6f557-50d2-4c81-a5c4-ccd2dd4342c9",
+    "train_id": "dcef73c4-f81a-4d44-a279-7ac1c7b2f374",
+    "coach_id": "A1",
+    "coach_type": "2A",
+    "label": "A1 — AC 2-Tier",
+    "position": 2,
+    "created_at": "2026-03-06T17:01:07.293123+00:00"
+  },
+  {
+    "id": "c4c842a7-a590-4e22-b364-949fbc53d65b",
+    "train_id": "dcef73c4-f81a-4d44-a279-7ac1c7b2f374",
+    "coach_id": "A2",
+    "coach_type": "2A",
+    "label": "A2 — AC 2-Tier",
+    "position": 3,
+    "created_at": "2026-03-06T17:01:07.293123+00:00"
+  },
+  {
+    "id": "e21f4052-5aea-4453-af0f-e6e13468be9a",
+    "train_id": "dcef73c4-f81a-4d44-a279-7ac1c7b2f374",
+    "coach_id": "B1",
+    "coach_type": "3A",
+    "label": "B1 — AC 3-Tier",
+    "position": 4,
+    "created_at": "2026-03-06T17:01:07.293123+00:00"
+  },
+  {
+    "id": "9a67242e-090c-496d-aca3-2a2fe8a9e4dd",
+    "train_id": "dcef73c4-f81a-4d44-a279-7ac1c7b2f374",
+    "coach_id": "B2",
+    "coach_type": "3A",
+    "label": "B2 — AC 3-Tier",
+    "position": 5,
+    "created_at": "2026-03-06T17:01:07.293123+00:00"
+  },
+  {
+    "id": "e6d96679-18cc-4c5c-abfa-8d1b5762d69a",
+    "train_id": "dcef73c4-f81a-4d44-a279-7ac1c7b2f374",
+    "coach_id": "B3",
+    "coach_type": "3A",
+    "label": "B3 — AC 3-Tier",
+    "position": 6,
+    "created_at": "2026-03-06T17:01:07.293123+00:00"
+  },
+  {
+    "id": "09036b17-914f-4ab0-9642-e1ff11cfbe34",
+    "train_id": "dcef73c4-f81a-4d44-a279-7ac1c7b2f374",
+    "coach_id": "B4",
+    "coach_type": "3A",
+    "label": "B4 — AC 3-Tier",
+    "position": 7,
+    "created_at": "2026-03-06T17:01:07.293123+00:00"
+  },
+  {
+    "id": "a9dae8f8-bd83-4758-816f-7939ff5c7f91",
+    "train_id": "dcef73c4-f81a-4d44-a279-7ac1c7b2f374",
+    "coach_id": "S1",
+    "coach_type": "SL",
+    "label": "S1 — Sleeper",
+    "position": 8,
+    "created_at": "2026-03-06T17:01:07.293123+00:00"
+  },
+  {
+    "id": "b8b3f603-7c8a-4365-a4c6-afceb3479e7a",
+    "train_id": "dcef73c4-f81a-4d44-a279-7ac1c7b2f374",
+    "coach_id": "S2",
+    "coach_type": "SL",
+    "label": "S2 — Sleeper",
+    "position": 9,
+    "created_at": "2026-03-06T17:01:07.293123+00:00"
+  },
+  {
+    "id": "dcf60172-47df-4c0f-8211-68bee183325b",
+    "train_id": "dcef73c4-f81a-4d44-a279-7ac1c7b2f374",
+    "coach_id": "S3",
+    "coach_type": "SL",
+    "label": "S3 — Sleeper",
+    "position": 10,
+    "created_at": "2026-03-06T17:01:07.293123+00:00"
+  },
+  {
+    "id": "b796e39b-5e47-42cd-911c-38f1fef92fe8",
+    "train_id": "dcef73c4-f81a-4d44-a279-7ac1c7b2f374",
+    "coach_id": "S4",
+    "coach_type": "SL",
+    "label": "S4 — Sleeper",
+    "position": 11,
+    "created_at": "2026-03-06T17:01:07.293123+00:00"
+  },
+  {
+    "id": "c2ad1309-4238-44e5-8db9-595fa10662f6",
+    "train_id": "dcef73c4-f81a-4d44-a279-7ac1c7b2f374",
+    "coach_id": "C1",
+    "coach_type": "CC",
+    "label": "C1 — Chair Car",
+    "position": 12,
+    "created_at": "2026-03-06T17:01:07.293123+00:00"
+  },
+  {
+    "id": "941d53da-cb27-480a-b96a-d9023f5fc488",
+    "train_id": "dcef73c4-f81a-4d44-a279-7ac1c7b2f374",
+    "coach_id": "D1",
+    "coach_type": "2S",
+    "label": "D1 — 2nd Sitting",
+    "position": 13,
+    "created_at": "2026-03-06T17:01:07.293123+00:00"
+  },
+  {
+    "id": "20174239-e612-4ea0-aa1b-31f63c291d51",
+    "train_id": "dcef73c4-f81a-4d44-a279-7ac1c7b2f374",
+    "coach_id": "GS",
+    "coach_type": "GEN",
+    "label": "GS — General",
+    "position": 14,
+    "created_at": "2026-03-06T17:01:07.293123+00:00"
+  }
+]

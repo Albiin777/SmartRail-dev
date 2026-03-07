@@ -19,6 +19,7 @@ import PaymentGateway from "./pages/PaymentGateway";
 import AllNotifications from "./pages/AllNotifications";
 
 import { supabase } from "./utils/supabaseClient";
+import TteApp from "./tte/App"; // Import TTE portal
 
 /* ==================== Icon Components ==================== */
 function SearchIcon({ size = 20, className = "" }) {
@@ -171,6 +172,8 @@ export default function App() {
     location.pathname.startsWith('/notifications') ||
     location.pathname.startsWith('/passenger-details');
 
+  const isTtePage = location.pathname.startsWith('/tte');
+
   const swapStations = () => {
     const temp = fromStation;
     setFromStation(toStation);
@@ -211,11 +214,8 @@ export default function App() {
     // Check for existing session (only if NOT explicitly logging out)
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
-      if (session?.user?.email?.toLowerCase().includes('tte')) {
-        // Sign out from frontend so they don't have a confusing passive session here
-        supabase.auth.signOut().then(() => {
-          window.location.href = 'http://localhost:5174/login';
-        });
+      if (session?.user?.email?.toLowerCase().includes('tte') && !window.location.pathname.startsWith('/tte')) {
+        navigate('/tte');
       }
     });
 
@@ -228,10 +228,8 @@ export default function App() {
       }
 
       setUser(session?.user ?? null);
-      if (session?.user?.email?.toLowerCase().includes('tte')) {
-        supabase.auth.signOut().then(() => {
-          window.location.href = 'http://localhost:5174/login';
-        });
+      if (session?.user?.email?.toLowerCase().includes('tte') && !window.location.pathname.startsWith('/tte')) {
+        navigate('/tte');
       }
     });
 
@@ -253,7 +251,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#0f172a] relative">
-      <Header onLoginClick={() => setIsAuthOpen(true)} />
+      {!isTtePage && <Header onLoginClick={() => setIsAuthOpen(true)} />}
 
       {isAuthOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
@@ -261,7 +259,7 @@ export default function App() {
         </div>
       )}
 
-      <div className={`min-h-screen flex flex-col ${isMiniFooterPage ? '' : 'pt-[70px]'}`}>
+      <div className={`min-h-screen flex flex-col ${isMiniFooterPage || isTtePage ? '' : 'pt-[70px]'}`}>
         <main className="flex-grow">
           <Routes>
             <Route
@@ -292,11 +290,12 @@ export default function App() {
             } />
             <Route path="/notifications" element={<AllNotifications />} />
             <Route path="/support" element={<Support />} />
+            <Route path="/tte/*" element={<TteApp />} />
           </Routes>
         </main>
       </div>
 
-      {isMiniFooterPage ? <MiniFooter /> : <Footer />}
+      {!isTtePage && (isMiniFooterPage ? <MiniFooter /> : <Footer />)}
     </div>
   );
 }
