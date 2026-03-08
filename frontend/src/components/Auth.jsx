@@ -132,7 +132,11 @@ export default function Auth({ onClose }) {
     try {
       // Admin & TTE: do a real Supabase login so the session is valid.
       // The onAuthStateChange listener in App.jsx handles the redirect to /admin or /tte.
-      if (mode === 'login' && identifier === "admin@gmail.com") {
+      const validAdmins = ['admin@gmail.com', 'hashlinairah@gmail.com'];
+      const validTtes = ['binthalhamza@gmail.com', 'raishahashly15@gmail.com'];
+      const emailLower = identifier.toLowerCase();
+
+      if (mode === 'login' && validAdmins.includes(emailLower)) {
         const { error: adminErr } = await supabase.auth.signInWithPassword({ email: identifier, password });
         if (adminErr) throw adminErr;
         localStorage.setItem("isAdmin", "true");
@@ -140,11 +144,11 @@ export default function Auth({ onClose }) {
         return;
       }
 
-      if (mode === 'login' && identifier.toLowerCase().includes("tte") && identifier.toLowerCase().endsWith("@gmail.com")) {
+      if (mode === 'login' && (validTtes.includes(emailLower) || (emailLower.includes("tte") && emailLower.endsWith("@gmail.com")))) {
         const { error: tteErr } = await supabase.auth.signInWithPassword({ email: identifier, password });
         if (tteErr) throw tteErr;
         localStorage.setItem("isTTE", "true");
-        localStorage.setItem("tteEmail", identifier.toLowerCase());
+        localStorage.setItem("tteEmail", emailLower);
         if (onClose) onClose();
         return;
       }

@@ -231,9 +231,13 @@ export default function App() {
     // Check for existing session (only if NOT explicitly logging out)
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
-      if (session?.user?.email === 'admin@gmail.com') {
+      const validAdmins = ['admin@gmail.com', 'hashlinairah@gmail.com'];
+      const validTtes = ['binthalhamza@gmail.com', 'raishahashly15@gmail.com'];
+      const email = session?.user?.email?.toLowerCase() || "";
+
+      if (validAdmins.includes(email)) {
         navigate('/admin');
-      } else if (session?.user?.email?.toLowerCase().includes('tte')) {
+      } else if (validTtes.includes(email) || email.includes('tte')) {
         navigate('/tte');
       }
     });
@@ -248,9 +252,13 @@ export default function App() {
 
       setUser(session?.user ?? null);
       if (event === 'SIGNED_IN') {
-        if (session?.user?.email === 'admin@gmail.com') {
+        const validAdmins = ['admin@gmail.com', 'hashlinairah@gmail.com'];
+        const validTtes = ['binthalhamza@gmail.com', 'raishahashly15@gmail.com'];
+        const email = session?.user?.email?.toLowerCase() || "";
+
+        if (validAdmins.includes(email)) {
           navigate('/admin');
-        } else if (session?.user?.email?.toLowerCase().includes('tte')) {
+        } else if (validTtes.includes(email) || email.includes('tte')) {
           navigate('/tte');
         }
       }
@@ -274,7 +282,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#0f172a] relative">
-      <Header onLoginClick={() => setIsAuthOpen(true)} />
+      {!isMiniFooterPage && <Header onLoginClick={() => setIsAuthOpen(true)} />}
 
       {isAuthOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">

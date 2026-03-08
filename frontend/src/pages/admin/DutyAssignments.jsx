@@ -121,8 +121,15 @@ export default function DutyAssignments() {
 
     return (
         <div className="space-y-5">
-            <h1 className="text-2xl md:text-3xl font-black text-white">📋 TTE Duty Assignments</h1>
-
+            <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#10b981] to-[#3b82f6] flex items-center justify-center text-white shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                </div>
+                <div>
+                    <h1 className="text-2xl md:text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400">TTE Duty Assignments</h1>
+                    <p className="text-gray-400 text-sm mt-1 font-medium tracking-wide">Assign personnel to trains</p>
+                </div>
+            </div>
             <div className="grid grid-cols-1 xl:grid-cols-5 gap-5">
 
                 {/* Assignment Form */}
@@ -236,8 +243,8 @@ export default function DutyAssignments() {
                                                 type="button"
                                                 onClick={() => toggleCoach(id)}
                                                 className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition ${selectedCoaches.includes(id)
-                                                        ? "bg-[#4ab86d]/20 text-[#4ab86d] border-[#4ab86d]/30"
-                                                        : "bg-white/3 text-gray-400 border-white/10 hover:bg-white/8"
+                                                    ? "bg-[#4ab86d]/20 text-[#4ab86d] border-[#4ab86d]/30"
+                                                    : "bg-white/3 text-gray-400 border-white/10 hover:bg-white/8"
                                                     }`}
                                             >
                                                 {id}
@@ -279,7 +286,12 @@ export default function DutyAssignments() {
 
                     <button type="submit" disabled={saving}
                         className="w-full bg-[#4ab86d] hover:bg-[#3da85c] disabled:opacity-50 text-black font-black py-3 rounded-xl transition">
-                        {saving ? "Saving..." : "📋 Create Assignment"}
+                        {saving ? "Saving..." : (
+                            <span className="flex items-center gap-2 justify-center">
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                                Create Assignment
+                            </span>
+                        )}
                     </button>
                 </form>
 

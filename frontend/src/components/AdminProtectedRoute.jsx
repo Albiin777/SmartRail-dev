@@ -24,7 +24,8 @@ export const AdminProtectedRoute = ({ children }) => {
     }
 
     // Only allow if logged in and the email is the specific admin email
-    if (user && user.email === 'admin@gmail.com') {
+    const validAdmins = ['admin@gmail.com', 'hashlinairah@gmail.com'];
+    if (user && validAdmins.includes(user.email)) {
         return children;
     }
 

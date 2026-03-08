@@ -19,15 +19,19 @@ export default function TrainManagement() {
     useEffect(() => {
         (async () => {
             try {
-                const data = await api.searchTrains("Kerala");
+                // Fetch all trains via our new query parameter support
+                const data = await api.searchTrains("all");
+
                 const enriched = data.map(t => {
                     const seed = t.trainNumber.split("").reduce((a, b) => a + b.charCodeAt(0), 0);
                     const status = seed % 5 === 0 ? "Delayed" : seed % 7 === 0 ? "Departed" : "Running";
-                    return { ...t, status, totalCoaches: 14 + (seed % 8) };
+                    return { ...t, status, totalCoaches: t.classes ? Object.keys(t.classes).length * 4 : 14 + (seed % 8) };
                 });
                 setTrains(enriched);
                 setFiltered(enriched);
-            } catch { }
+            } catch (err) {
+                console.error("Failed to load trains", err);
+            }
             setLoading(false);
         })();
     }, []);
@@ -49,8 +53,16 @@ export default function TrainManagement() {
     };
 
     return (
-        <div className="space-y-5">
-            <h1 className="text-2xl md:text-3xl font-black text-white">🚂 Train Management</h1>
+        <div className="space-y-6">
+            <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#10b981] to-[#3b82f6] flex items-center justify-center text-white shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h14M5 8a2 2 0 00-2 2v8a2 2 0 002 2h14a2 2 0 002-2v-8a2 2 0 00-2-2H5z" /></svg>
+                </div>
+                <div>
+                    <h1 className="text-2xl md:text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400">Train Management</h1>
+                    <p className="text-gray-400 text-sm mt-1 font-medium tracking-wide">Monitor and manage the active fleet</p>
+                </div>
+            </div>
 
             {/* Status filter pills */}
             <div className="flex flex-wrap gap-2">
@@ -63,8 +75,8 @@ export default function TrainManagement() {
                         key={val}
                         onClick={() => setStatusFilter(val)}
                         className={`px-4 py-1.5 rounded-full text-xs font-bold border transition ${statusFilter === val
-                                ? val === "all" ? "bg-white/15 text-white border-white/20" : inactiveCls.replace("/8", "/20")
-                                : `${inactiveCls} opacity-60 hover:opacity-100`
+                            ? val === "all" ? "bg-white/15 text-white border-white/20" : inactiveCls.replace("/8", "/20")
+                            : `${inactiveCls} opacity-60 hover:opacity-100`
                             }`}
                     >
                         {label} <span className="ml-1 opacity-70">{cnt}</span>
@@ -73,15 +85,17 @@ export default function TrainManagement() {
             </div>
 
             {/* Search */}
-            <div className="relative">
+            <div className="relative group">
                 <input
                     type="text"
                     value={searchQ}
                     onChange={e => setSearchQ(e.target.value)}
                     placeholder="Search train name or number..."
-                    className="w-full bg-[#111827] text-white border border-gray-700/50 rounded-xl pl-10 pr-4 py-3 text-sm focus:outline-none focus:border-[#4ab86d] transition"
+                    className="w-full bg-[#0a1120] text-gray-200 border border-white/10 rounded-xl pl-12 pr-4 py-3.5 text-sm font-medium focus:outline-none focus:border-[#10b981] focus:ring-1 focus:ring-[#10b981] transition-all duration-300 shadow-sm group-hover:border-white/20"
                 />
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 text-base">🔍</span>
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 transition-colors group-hover:text-gray-300">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                </span>
             </div>
 
             {loading ? (
@@ -97,32 +111,42 @@ export default function TrainManagement() {
                         return (
                             <div
                                 key={i}
-                                onClick={() => navigate(`/admin/train/${t.trainNumber}`)}
-                                className="bg-[#111827] border border-white/5 rounded-2xl p-4 cursor-pointer hover:bg-white/3 hover:border-white/10 transition group"
+                                onClick={() => navigate(`/admin/seats?train=${t.trainNumber}`)}
+                                className="bg-[#0a1120] border border-white/5 rounded-2xl p-5 cursor-pointer hover:bg-white/[0.03] hover:border-white/20 hover:-translate-y-1 hover:shadow-xl transition-all duration-300 group relative overflow-hidden"
                             >
-                                <div className="flex items-start justify-between mb-3">
-                                    <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/15 flex items-center justify-center text-blue-400 text-base">🚂</div>
-                                    <span className={`flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded-full border font-bold ${cfg.color}`}>
-                                        <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} animate-pulse`} />
+                                <div className="absolute -right-4 -top-4 opacity-0 blur-xl w-24 h-24 rounded-full bg-blue-500 transition-all duration-500 group-hover:scale-150 group-hover:opacity-10" />
+                                <div className="flex items-start justify-between mb-4">
+                                    <div className="w-10 h-10 rounded-xl bg-[#3b82f6]/10 border border-[#3b82f6]/20 flex items-center justify-center text-[#3b82f6] shadow-inner group-hover:bg-[#3b82f6]/20 transition-colors">
+                                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h14M5 8a2 2 0 00-2 2v8a2 2 0 002 2h14a2 2 0 002-2v-8a2 2 0 00-2-2H5z" /></svg>
+                                    </div>
+                                    <span className={`flex items-center gap-1.5 text-[10px] uppercase tracking-wider px-3 py-1 rounded-full border font-bold ${cfg.color}`}>
+                                        <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} animate-pulse shadow-[0_0_8px_currentColor]`} />
                                         {t.status}
                                     </span>
                                 </div>
-                                <div className="font-bold text-white text-sm leading-tight mb-1 group-hover:text-[#4ab86d] transition">{t.trainName}</div>
-                                <div className="text-[10px] font-mono text-gray-500 mb-2">#{t.trainNumber}</div>
-                                <div className="text-xs text-gray-400 truncate">{t.source} → {t.destination}</div>
-                                <div className="mt-3 flex items-center justify-between text-[10px] text-gray-600">
-                                    <span>{t.totalCoaches} coaches</span>
-                                    <span className="text-[#4ab86d] opacity-0 group-hover:opacity-100 font-bold transition">View Seats →</span>
+                                <div className="font-extrabold text-white text-base leading-tight mb-1 group-hover:text-[#10b981] transition-colors">{t.trainName}</div>
+                                <div className="text-[11px] font-mono font-semibold text-gray-500 mb-3 bg-white/5 inline-block px-2 py-0.5 rounded border border-white/5">#{t.trainNumber}</div>
+                                <div className="text-xs text-gray-300 font-medium truncate flex items-center gap-2">
+                                    <span className="truncate">{t.source}</span>
+                                    <svg className="w-3 h-3 text-gray-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                                    <span className="truncate">{t.destination}</span>
+                                </div>
+                                <div className="mt-5 pt-4 border-t border-white/5 flex items-center justify-between text-[11px] font-bold text-gray-500">
+                                    <span className="flex items-center gap-1.5"><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg> {t.totalCoaches} coaches</span>
+                                    <span className="text-[#10b981] opacity-0 group-hover:opacity-100 transition-all duration-300 translate-x-2 group-hover:translate-x-0 flex items-center gap-1">View Seats <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg></span>
                                 </div>
                             </div>
                         );
                     })}
                 </div>
-            )}
+            )
+            }
 
-            {!loading && filtered.length === 0 && (
-                <div className="text-center py-16 text-gray-500 text-sm">No trains match your filter.</div>
-            )}
-        </div>
+            {
+                !loading && filtered.length === 0 && (
+                    <div className="text-center py-16 text-gray-500 text-sm">No trains match your filter.</div>
+                )
+            }
+        </div >
     );
 }

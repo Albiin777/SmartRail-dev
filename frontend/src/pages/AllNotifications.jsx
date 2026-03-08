@@ -1,64 +1,57 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, Ticket, Info, Newspaper, Inbox, Bell, CheckCircle2 } from 'lucide-react';
-
-const DUMMY_NOTIFICATIONS = [
-    {
-        id: 1,
-        type: 'alert',
-        title: 'Train Cancelled',
-        message: 'Alert: Train 22653 has been cancelled due to track maintenance. Full refund initiated.',
-        date: '10 min ago',
-        read: false,
-        link: null,
-        forYou: true
-    },
-    {
-        id: 2,
-        type: 'reminder',
-        title: 'Waitlist Alert',
-        message: 'Your waitlisted ticket on Pune Express is now RAC. You can view the PNR status to confirm the coach.',
-        date: '2 hours ago',
-        read: false,
-        link: '/pnr-status',
-        forYou: true
-    },
-    {
-        id: 3,
-        type: 'news',
-        title: 'New Vande Bharat Express Launched',
-        message: 'Indian Railways introduces the new Vande Bharat Express connecting Trivandrum and Kasaragod in record time. Read the full article to see schedules and pricing.',
-        date: '5 hours ago',
-        read: false,
-        link: '#',
-        forYou: false
-    },
-    {
-        id: 4,
-        type: 'info',
-        title: 'Admin Update',
-        message: 'Kerala Express 12625 is running late by 2 hours. Expected arrival at ERS is 14:30.',
-        date: '1 day ago',
-        read: true,
-        link: null,
-        forYou: true
-    },
-    {
-        id: 5,
-        type: 'news',
-        title: 'Monsoon Safety Guidelines Released',
-        message: 'Please review the updated safety guidelines for traveling during the monsoon season.',
-        date: '3 days ago',
-        read: true,
-        link: '#',
-        forYou: false
-    }
-];
+import { supabase } from '../utils/supabaseClient';
 
 export default function AllNotifications() {
-    const [notifications, setNotifications] = useState(DUMMY_NOTIFICATIONS);
+    const [notifications, setNotifications] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('all'); // 'all' | 'foryou'
     const navigate = useNavigate();
+
+    useEffect(() => {
+        const fetchNotifications = async () => {
+            try {
+                const { data, error } = await supabase
+                    .from('notifications')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+
+                if (!error && data) {
+                    const formatted = data.map(n => {
+                        // Determine type based on standard admin types
+                        let iconType = 'info';
+                        if (n.type?.toLowerCase().includes('alert') || n.type?.toLowerCase().includes('urgent')) iconType = 'alert';
+                        if (n.type?.toLowerCase().includes('news') || n.type?.toLowerCase().includes('update')) iconType = 'news';
+                        if (n.type?.toLowerCase().includes('reminder')) iconType = 'reminder';
+
+                        // Format Date
+                        const dateObj = new Date(n.created_at);
+                        const diffHours = Math.round((new Date() - dateObj) / (1000 * 60 * 60));
+                        const dateStr = diffHours < 24 ? `${diffHours} hours ago` : `${Math.floor(diffHours / 24)} days ago`;
+
+                        return {
+                            id: n.id,
+                            type: iconType,
+                            title: n.title,
+                            message: n.message,
+                            date: diffHours === 0 ? 'Just now' : dateStr,
+                            read: false, // Default to unread for public view
+                            link: null,
+                            forYou: false // System broadcasts aren't specifically "For You"
+                        };
+                    });
+                    setNotifications(formatted);
+                }
+            } catch (err) {
+                console.error("Failed to fetch notifications:", err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchNotifications();
+    }, []);
 
     const filteredNotifications = notifications.filter(n => {
         if (activeTab === 'foryou') return n.forYou;

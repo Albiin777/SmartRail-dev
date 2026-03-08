@@ -47,7 +47,15 @@ export default function AdminComplaints() {
 
     return (
         <div className="space-y-5">
-            <h1 className="text-2xl md:text-3xl font-black text-white">💬 Complaints</h1>
+            <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#10b981] to-[#3b82f6] flex items-center justify-center text-white shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+                </div>
+                <div>
+                    <h1 className="text-2xl md:text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400">Complaints</h1>
+                    <p className="text-gray-400 text-sm mt-1 font-medium tracking-wide">Manage user feedback</p>
+                </div>
+            </div>
 
             {/* Filter Tabs */}
             <div className="flex gap-2 flex-wrap">

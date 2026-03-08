@@ -117,7 +117,9 @@ export default function TteManagement() {
                     <div className="text-center text-gray-400 py-20">Loading TTEs...</div>
                 ) : ttes.length === 0 ? (
                     <div className="bg-[#1D2332] border border-white/10 rounded-2xl p-12 text-center">
-                        <div className="text-4xl mb-4">👤</div>
+                        <div className="w-16 h-16 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 mb-4 shadow-inner">
+                            <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                        </div>
                         <p className="text-gray-400">No TTEs added yet. Click "Add TTE" to get started.</p>
                     </div>
                 ) : (
