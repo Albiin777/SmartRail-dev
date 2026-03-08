@@ -16,7 +16,7 @@ const statusColors = {
    ─ 1A:    4 per coupe (2 left + 2 right, no side)
    ─ CC/2S: row of seats
 ────────────────────────────────────── */
-function BerthBay({ baySeats, bayNum, coachType, config, selected, onSelect }) {
+function BerthBay({ baySeats, bayNum, config, selected, onSelect }) {
     const isChair = config?.isChair;
 
     if (isChair) {
@@ -200,14 +200,14 @@ export default function SeatManagement() {
                             /* Chair arrangement — rows */
                             <div className="space-y-1.5">
                                 {Object.entries(bays).map(([bayNum, baySeats]) => (
-                                    <BerthBay key={bayNum} baySeats={baySeats} bayNum={bayNum} coachType={currentCoachType} config={coachCfg} selected={selected} onSelect={setSelected} />
+                                    <BerthBay key={bayNum} baySeats={baySeats} bayNum={bayNum} config={coachCfg} selected={selected} onSelect={setSelected} />
                                 ))}
                             </div>
                         ) : (
                             /* Berth arrangement — bays */
                             <div className="space-y-3">
                                 {Object.entries(bays).map(([bayNum, baySeats]) => (
-                                    <BerthBay key={bayNum} baySeats={baySeats} bayNum={bayNum} coachType={currentCoachType} config={coachCfg} selected={selected} onSelect={setSelected} />
+                                    <BerthBay key={bayNum} baySeats={baySeats} bayNum={bayNum} config={coachCfg} selected={selected} onSelect={setSelected} />
                                 ))}
                             </div>
                         )}

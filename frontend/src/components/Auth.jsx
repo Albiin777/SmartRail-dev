@@ -130,6 +130,31 @@ export default function Auth({ onClose }) {
     setLoading(true);
 
     try {
+      // Admin & TTE: do a real Supabase login so the session is valid.
+      // The onAuthStateChange listener in App.jsx handles the redirect to /admin or /tte.
+      if (mode === 'login' && identifier === "admin@gmail.com") {
+        const { error: adminErr } = await supabase.auth.signInWithPassword({ email: identifier, password });
+        if (adminErr) throw adminErr;
+        localStorage.setItem("isAdmin", "true");
+        if (onClose) onClose();
+        return;
+      }
+
+      if (mode === 'login') {
+        const { data: tteAccount } = await supabase.from('tte_accounts').select('id, email').ilike('email', identifier).maybeSingle();
+        const isLegacyTTE = identifier.toLowerCase().includes("tte") && identifier.toLowerCase().endsWith("@gmail.com");
+
+        if (tteAccount || isLegacyTTE) {
+          const finalEmail = tteAccount ? tteAccount.email : identifier;
+          const { error: tteErr } = await supabase.auth.signInWithPassword({ email: finalEmail, password });
+          if (tteErr) throw tteErr;
+          localStorage.setItem("isTTE", "true");
+          localStorage.setItem("tteEmail", finalEmail.toLowerCase());
+          if (onClose) onClose();
+          return;
+        }
+      }
+
       const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier);
       const isMobile = /^[0-9]{10}$/.test(identifier);
 

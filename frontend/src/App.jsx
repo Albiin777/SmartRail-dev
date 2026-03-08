@@ -12,12 +12,27 @@ import Support from "./pages/Support";
 import Results from "./pages/Results";
 import Reviews from "./components/Reviews";
 import PassengerDetails from "./pages/PassengerDetails";
-
-import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from "react-router-dom";
-import SeatLayout from "./pages/SeatLayout";
-import PaymentGateway from "./pages/PaymentGateway";
+import AdminDashboard from "./pages/AdminDashboard";
+import AdminTrainView from "./pages/AdminTrainView";
+import TteDashboard from "./pages/TteDashboard";
 import AllNotifications from "./pages/AllNotifications";
 
+import TrainManagement from "./pages/admin/TrainManagement";
+import StationManagement from "./pages/admin/StationManagement";
+import TteManagement from "./pages/admin/TteManagement";
+import DutyAssignments from "./pages/admin/DutyAssignments";
+import ScheduleManagement from "./pages/admin/ScheduleManagement";
+import AdminReports from "./pages/admin/AdminReports";
+import SeatManagement from "./pages/admin/SeatManagement";
+import AdminComplaints from "./pages/admin/AdminComplaints";
+import AdminNotifications from "./pages/admin/AdminNotifications";
+import FareEditor from "./pages/admin/FareEditor";
+
+import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation, Navigate } from "react-router-dom";
+import SeatLayout from "./pages/SeatLayout";
+import PaymentGateway from "./pages/PaymentGateway";
+import AdminLayout from "./layouts/AdminLayout";
+import { AdminProtectedRoute } from "./components/AdminProtectedRoute";
 import { supabase } from "./utils/supabaseClient";
 import TteApp from "./tte/App"; // Import TTE portal
 
@@ -143,6 +158,8 @@ const UsersIcon = ({ size = 20, className = "" }) => (
   </svg>
 );
 
+
+
 /* ==================== Main App Component ==================== */
 export default function App() {
   const [theme] = useState("dark");
@@ -169,10 +186,12 @@ export default function App() {
     location.pathname.startsWith('/seat-layout') ||
     location.pathname.startsWith('/payment') ||
     location.pathname.startsWith('/results') ||
-    location.pathname.startsWith('/notifications') ||
-    location.pathname.startsWith('/passenger-details');
+    location.pathname.startsWith('/passenger-details') ||
+    location.pathname.startsWith('/admin') ||
+    location.pathname.startsWith('/tte');
 
   const isTtePage = location.pathname.startsWith('/tte');
+  const isAdminPage = location.pathname.startsWith('/admin');
 
   const swapStations = () => {
     const temp = fromStation;
@@ -212,15 +231,28 @@ export default function App() {
     }
 
     // Check for existing session (only if NOT explicitly logging out)
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      if (session?.user?.email?.toLowerCase().includes('tte') && !window.location.pathname.startsWith('/tte')) {
-        navigate('/tte');
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user?.email === 'admin@gmail.com') {
+        navigate('/admin');
+      } else if (session?.user?.email) {
+        const email = session.user.email.toLowerCase();
+        let isTTE = email.includes('tte') && email.endsWith('@gmail.com');
+
+        if (!isTTE) {
+          const { data } = await supabase.from('tte_accounts').select('id').eq('email', email).maybeSingle();
+          if (data) isTTE = true;
+        }
+
+        if (isTTE) {
+          localStorage.setItem("isTTE", "true");
+          localStorage.setItem("tteEmail", email);
+          if (!window.location.pathname.startsWith('/tte')) navigate('/tte');
+        }
       }
     });
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       // If we are actively in the middle of logging out, don't trigger the login redirect
       if (event === 'SIGNED_OUT') {
         setUser(null);
@@ -228,8 +260,24 @@ export default function App() {
       }
 
       setUser(session?.user ?? null);
-      if (session?.user?.email?.toLowerCase().includes('tte') && !window.location.pathname.startsWith('/tte')) {
-        navigate('/tte');
+      if (event === 'SIGNED_IN') {
+        if (session?.user?.email === 'admin@gmail.com') {
+          navigate('/admin');
+        } else if (session?.user?.email) {
+          const email = session.user.email.toLowerCase();
+          let isTTE = email.includes('tte') && email.endsWith('@gmail.com');
+
+          if (!isTTE) {
+            const { data } = await supabase.from('tte_accounts').select('id').eq('email', email).maybeSingle();
+            if (data) isTTE = true;
+          }
+
+          if (isTTE) {
+            localStorage.setItem("isTTE", "true");
+            localStorage.setItem("tteEmail", email);
+            if (!window.location.pathname.startsWith('/tte')) navigate('/tte');
+          }
+        }
       }
     });
 
@@ -251,7 +299,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#0f172a] relative">
-      {!isTtePage && <Header onLoginClick={() => setIsAuthOpen(true)} />}
+      {!isTtePage && !isAdminPage && <Header onLoginClick={() => setIsAuthOpen(true)} />}
 
       {isAuthOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
@@ -266,6 +314,23 @@ export default function App() {
               path="/"
               element={
                 <>
+                  {localStorage.getItem("admin_broadcast") && (
+                    <div className="bg-orange-600 text-white px-4 py-3 text-sm font-bold flex items-center justify-between z-50 relative">
+                      <div className="flex items-center gap-3 overflow-hidden">
+                        <span className="shrink-0 animate-pulse">📢 ALERT:</span>
+                        <p className="truncate sm:whitespace-normal sm:animate-none animate-[marquee_15s_linear_infinite] whitespace-nowrap">{localStorage.getItem("admin_broadcast")}</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          localStorage.removeItem("admin_broadcast");
+                          window.location.reload();
+                        }}
+                        className="shrink-0 text-white/80 hover:text-white px-2 cursor-pointer font-bold bg-black/20 rounded-lg py-1 ml-4 text-xs"
+                      >
+                        DISMISS
+                      </button>
+                    </div>
+                  )}
                   <Hero />
                   <BookingCard />
                   <div id="pnr-section" className="scroll-mt-[190px]">
@@ -291,11 +356,31 @@ export default function App() {
             <Route path="/notifications" element={<AllNotifications />} />
             <Route path="/support" element={<Support />} />
             <Route path="/tte/*" element={<TteApp />} />
+
+            {/* --- Admin Portal (Nested Routes) --- */}
+            <Route path="/admin" element={
+              <AdminProtectedRoute>
+                <AdminLayout />
+              </AdminProtectedRoute>
+            }>
+              <Route index element={<AdminDashboard />} />
+              <Route path="trains" element={<TrainManagement />} />
+              <Route path="seats" element={<SeatManagement />} />
+              <Route path="stations" element={<StationManagement />} />
+              <Route path="ttes" element={<TteManagement />} />
+              <Route path="assignments" element={<DutyAssignments />} />
+              <Route path="fares" element={<FareEditor />} />
+              <Route path="complaints" element={<AdminComplaints />} />
+              <Route path="notifications" element={<AdminNotifications />} />
+              <Route path="schedules" element={<ScheduleManagement />} />
+              <Route path="reports" element={<AdminReports />} />
+              <Route path="train/:trainNumber" element={<AdminTrainView />} />
+            </Route>
           </Routes>
         </main>
       </div>
 
-      {!isTtePage && (isMiniFooterPage ? <MiniFooter /> : <Footer />)}
+      {!isTtePage && !isAdminPage && (isMiniFooterPage ? <MiniFooter /> : <Footer />)}
     </div>
   );
 }

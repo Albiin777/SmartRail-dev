@@ -190,7 +190,8 @@ const createBooking = async ({ trainNumber, journeyDate, classCode, source, dest
             status,
             seatNumber,
             racNumber,
-            wlNumber
+            wlNumber,
+            berthType: p.berthPreference || 'SEAT'
         });
     }
 
@@ -214,10 +215,13 @@ const createBooking = async ({ trainNumber, journeyDate, classCode, source, dest
     if (bookingError) throw new Error('Failed to create PNR record: ' + bookingError.message);
 
     // Insert Passengers with bookingIn
-    const passengersToInsert = passengerRecords.map(p => ({
-        ...p,
-        bookingId: bookingData.id
-    }));
+    const passengersToInsert = passengerRecords.map(p => {
+        const { berthType, ...rest } = p;
+        return {
+            ...rest,
+            bookingId: bookingData.id
+        }
+    });
 
     const { error: passengerError } = await supabase
         .from('passengers')
@@ -227,6 +231,82 @@ const createBooking = async ({ trainNumber, journeyDate, classCode, source, dest
         // Rollback (Manual since Supabase HTTP API doesn't support transactions easily without RPC)
         await supabase.from('pnr_bookings').delete().eq('id', bookingData.id);
         throw new Error('Failed to add passengers: ' + passengerError.message);
+    }
+
+    // NEW LOGIC: sync to passenger_details for Admin Visualizer & tte_passengers for TTE App
+    const adminDetailsToInsert = passengerRecords.filter(p => p.status === 'CNF' && p.seatNumber).map(p => {
+        const [coach, ...seatNumParts] = p.seatNumber.split('-');
+        const seat_number = seatNumParts.join('-') || p.seatNumber;
+
+        return {
+            pnr_number: pnr,
+            train_no: trainNumber,
+            date: journeyDate,
+            coach: coach || classCode,
+            seat_number: seat_number,
+            berth_type: p.berthType,
+            passenger_name: p.name,
+            passenger_age: p.age,
+            passenger_gender: p.gender,
+            booking_status: 'CONFIRMED'
+        };
+    });
+
+    if (adminDetailsToInsert.length > 0) {
+        // Fire and forget insert to keep Admin dashboard live 
+        await supabase.from('passenger_details').insert(adminDetailsToInsert).then(res => {
+            if (res.error) console.error("Admin visualizer sync error:", res.error);
+        });
+
+        // Sync to TTE app
+        // 1. First get the internal train_id from admin_trains or insert it
+        let { data: trainData } = await supabase.from('admin_trains').select('id').eq('train_number', trainNumber).maybeSingle();
+
+        if (!trainData) {
+            // Auto-register the train for the TTE app if it doesn't exist
+            const { data: newTrain, error: err } = await supabase.from('admin_trains').insert({
+                train_number: trainNumber,
+                name: `SmartRail Express ${trainNumber}`,
+                source: source,
+                destination: destination,
+                departure_time: '10:00:00',
+                arrival_time: '22:00:00'
+            }).select('id').single();
+            if (newTrain) trainData = newTrain;
+        }
+
+        if (trainData) {
+            const ttePassengersToInsert = passengerRecords.map(p => {
+                let coach = 'GS';
+                let seat_no = 0;
+                if (p.seatNumber) {
+                    const parts = p.seatNumber.split('-');
+                    coach = parts[0] || classCode;
+                    seat_no = parseInt(parts.slice(1).join('-'), 10) || 0;
+                }
+                return {
+                    train_id: trainData.id,
+                    journey_date: journeyDate,
+                    pnr: pnr,
+                    name: p.name,
+                    age: p.age,
+                    gender: p.gender,
+                    mobile: 'N/A', // Passenger app booking doesn't save mobile per passenger yet
+                    coach_id: coach,
+                    seat_no: seat_no,
+                    boarding: source,
+                    destination: destination,
+                    status: p.status === 'CNF' ? 'Confirmed' : p.status === 'WL' ? 'Waitlist' : 'RAC',
+                    id_proof: 'Ticket',
+                    ticket_class: classCode,
+                    verified: false
+                };
+            });
+
+            await supabase.from('tte_passengers').insert(ttePassengersToInsert).then(res => {
+                if (res.error) console.error("TTE sync error:", res.error);
+            });
+        }
     }
 
     return { pnr, status: passengerRecords[0].status, passengers: passengerRecords };
@@ -261,6 +341,10 @@ const cancelBooking = async (pnr, passengerId = null) => {
         if (p.status === 'CNF') {
             canceledCnfSeats.push(p.seatNumber);
         }
+
+        // SYNC: Remove from admin passenger_details and tte_passengers
+        await supabase.from('passenger_details').delete().eq('pnr_number', pnr).eq('passenger_name', p.name);
+        await supabase.from('tte_passengers').delete().eq('pnr', pnr).eq('name', p.name);
     }
 
     // Process Promotions if any CNF seats freed
@@ -365,6 +449,52 @@ const processPromotions = async (trainNumber, journeyDate, classCode, freedSeats
             wlNumber: update.wlNumber,
             racNumber: update.racNumber
         }).eq('id', update.id);
+
+        // SYNC: Update tte_passengers and passenger_details on promotion
+        const { data: pData } = await supabase.from('passengers').select('name, bookingId').eq('id', update.id).single();
+        if (pData) {
+            const { data: bData } = await supabase.from('pnr_bookings').select('pnr').eq('id', pData.bookingId).single();
+            if (bData) {
+                let coach = classCode;
+                let seat_no = 0;
+                if (update.seatNumber) {
+                    const parts = update.seatNumber.split('-');
+                    coach = parts[0] || classCode;
+                    seat_no = parseInt(parts.slice(1).join('-'), 10) || 0;
+                }
+
+                // Update TTE
+                await supabase.from('tte_passengers').update({
+                    status: update.status === 'CNF' ? 'Confirmed' : 'RAC',
+                    coach_id: coach,
+                    seat_no: seat_no
+                }).eq('pnr', bData.pnr).eq('name', pData.name);
+
+                // If fully confirmed, add to passenger_details for Admin
+                if (update.status === 'CNF') {
+                    // Check if exists first to avoid duplicate if we somehow already inserted
+                    const { data: existingAdmin } = await supabase.from('passenger_details').select('id').eq('pnr_number', bData.pnr).eq('passenger_name', pData.name).maybeSingle();
+                    if (!existingAdmin) {
+                        await supabase.from('passenger_details').insert({
+                            pnr_number: bData.pnr,
+                            train_no: trainNumber,
+                            date: journeyDate,
+                            coach: coach,
+                            seat_number: seat_no,
+                            berth_type: 'SEAT',
+                            passenger_name: pData.name,
+                            booking_status: 'CONFIRMED'
+                        });
+                    } else {
+                        await supabase.from('passenger_details').update({
+                            coach: coach,
+                            seat_number: seat_no,
+                            booking_status: 'CONFIRMED'
+                        }).eq('id', existingAdmin.id);
+                    }
+                }
+            }
+        }
     }
 
     console.log(`Promoted ${updates.length} passengers from Waitlist due to cancellation.`);

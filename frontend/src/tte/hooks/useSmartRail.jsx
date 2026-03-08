@@ -101,6 +101,8 @@ export function SmartRailProvider({ children }) {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [trainId, setTrainId] = useState(null);
+    const [trainDetails, setTrainDetails] = useState(null);
+    const [tteDetails, setTteDetails] = useState(null);
     const [logs, setLogs] = useState([]);
 
     // addLog must be defined BEFORE the useEffect that uses it
@@ -126,21 +128,61 @@ export function SmartRailProvider({ children }) {
             }
 
             try {
-                // 1. Find the train
-                const { data: trainData, error: trainErr } = await supabase
-                    .from('admin_trains')
-                    .select('id, train_number, name, source, destination, departure_time, arrival_time')
-                    .eq('train_number', '12622')
-                    .maybeSingle();
+                // 1. Find the train dynamically based on Admin Duty Assignment
+                const tteEmail = localStorage.getItem('tteEmail');
+
+                let assignedTrainNumber = null;
+
+                if (tteEmail) {
+                    // Look up duty assignment case-insensitively
+                    const { data: assignmentData, error: assignmentErr } = await supabase
+                        .from('tte_assignments')
+                        .select('train_no, train_name, source_station, dest_station, tte_name, tte_id')
+                        .ilike('tte_email', tteEmail)
+                        .ilike('status', 'active')
+                        .order('created_at', { ascending: false })
+                        .limit(1)
+                        .maybeSingle();
+
+                    if (!assignmentErr && assignmentData) {
+                        assignedTrainNumber = assignmentData.train_no;
+                        setTteDetails({
+                            name: assignmentData.tte_name,
+                            id: assignmentData.tte_id,
+                            trainName: assignmentData.train_name,
+                            source: assignmentData.source_station,
+                            destination: assignmentData.dest_station
+                        });
+                    }
+                }
+
+                // Fallback to localStorage or just finding the latest train if no active assignment
+                if (!assignedTrainNumber) {
+                    assignedTrainNumber = localStorage.getItem('tte_train_number');
+                }
+
+                let query = supabase.from('admin_trains').select('id, train_number, name, source, destination, departure_time, arrival_time');
+
+                if (assignedTrainNumber) {
+                    query = query.eq('train_number', assignedTrainNumber);
+                } else {
+                    query = query.order('id', { ascending: false }).limit(1);
+                }
+
+                const { data: trainDataList, error: trainErr } = await query;
+                const trainData = trainDataList?.[0];
 
                 if (trainErr || !trainData) {
-                    setError('Train 12622 not found. Run supabase_tte_setup.sql first.');
+                    setError(`No train found. Ensure you have an active assignment or book a ticket to initialize one. (Train No: ${assignedTrainNumber || 'None'})`);
                     setDataSource('error');
                     setLoading(false);
                     return;
                 }
 
                 setTrainId(trainData.id);
+                setTrainDetails(trainData);
+                // Save it for reference
+                localStorage.setItem('tte_train_number', trainData.train_number);
 
                 // 2. Load coaches
                 const { data: coachData, error: coachErr } = await supabase
@@ -161,13 +203,12 @@ export function SmartRailProvider({ children }) {
                     setSelectedCoach(mapped[0]?.id || null);
                 }
 
-                // 3. Load TTE passengers for today
+                // 3. Load TTE passengers for this train
                 const today = new Date().toISOString().split('T')[0];
                 const { data: paxData, error: paxErr } = await supabase
                     .from('tte_passengers')
                     .select('*')
                     .eq('train_id', trainData.id)
-                    .eq('journey_date', today)
                     .order('coach_id')
                     .order('seat_no');
 
@@ -192,57 +233,6 @@ export function SmartRailProvider({ children }) {
                         fare: parseFloat(p.fare) || 0,
                     }));
                 }
-
-                // Append live app bookings
-                const { data: liveBookings } = await supabase
-                    .from('pnr_bookings')
-                    .select('pnr, source, destination, classCode, passengers ( id, name, age, gender, status, "seatNumber" )')
-                    .eq('trainNumber', trainData.train_number);
-
-                if (liveBookings) {
-                    liveBookings.forEach(booking => {
-                        const classCodeMap = { '1A': 'H1', '2A': 'A1', '3A': 'B1', 'SL': 'S1', 'CC': 'C1', '2S': 'D1' };
-                        booking.passengers.forEach(p => {
-                            let coachId = classCodeMap[booking.classCode] || 'GS';
-                            let seatNo = 0;
-
-                            if (p.seatNumber) {
-                                // e.g. "B1-12"
-                                const parts = p.seatNumber.split('-');
-                                if (parts.length === 2) {
-                                    coachId = parts[0].trim();
-                                    seatNo = parseInt(parts[1].trim(), 10) || 0;
-                                } else {
-                                    seatNo = parseInt(p.seatNumber, 10) || 0;
-                                }
-                            }
-
-                            let mapStatus = p.status;
-                            if (p.status === 'CNF') mapStatus = 'Confirmed';
-                            else if (p.status === 'WL') mapStatus = 'Waitlist';
-
-                            mapped.push({
-                                id: p.id,
-                                pnr: booking.pnr,
-                                name: p.name,
-                                age: p.age,
-                                gender: p.gender,
-                                mobile: 'N/A',
-                                seatNo: seatNo,
-                                coach: coachId,
-                                boarding: booking.source,
-                                destination: booking.destination,
-                                status: mapStatus,
-                                idProof: 'Aadhar',
-                                ticketClass: booking.classCode,
-                                verified: false,
-                                flags: [],
-                                fare: 0,
-                            });
-                        });
-                    });
-                }
-
                 setPassengers(mapped);
                 console.log(`SmartRail: Loaded ${mapped.length} passengers from Supabase`);
 
@@ -299,7 +289,6 @@ export function SmartRailProvider({ children }) {
         loadFromSupabase();
     }, []);
 
-    // ── Derived state (safe-guarded against null selectedCoach)
     const safeCoach = selectedCoach || '';
     const currentCoachObj = coaches.find(c => c.id === safeCoach) || null;
     const currentCoachType = currentCoachObj?.type || '3A';
@@ -329,16 +318,16 @@ export function SmartRailProvider({ children }) {
     };
 
     const tteInfo = {
-        name: 'TTE',
-        id: 'TTE',
-        trainNo: '12622',
-        trainName: 'Tamil Nadu SF Express',
-        route: 'Chennai Central → New Delhi',
-        source: 'MAS (Chennai Central)',
-        destination: 'NDLS (New Delhi)',
+        name: tteDetails?.name || 'TTE',
+        id: tteDetails?.id || 'TTE1',
+        trainNo: trainDetails?.train_number || localStorage.getItem('tte_train_number') || '12622',
+        trainName: tteDetails?.trainName || trainDetails?.name || 'SmartRail Express',
+        route: `${tteDetails?.source || trainDetails?.source || 'Source'} → ${tteDetails?.destination || trainDetails?.destination || 'Destination'}`,
+        source: tteDetails?.source || trainDetails?.source || 'Station A',
+        destination: tteDetails?.destination || trainDetails?.destination || 'Station B',
         date: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
-        departure: '22:00',
-        arrival: '06:35 +1',
+        departure: trainDetails?.departure_time || '22:00',
+        arrival: trainDetails?.arrival_time || '06:35 +1',
         duration: '32h 35m',
         shift: '06:00 — 22:00',
         coach: safeCoach || 'Loading...',
@@ -508,6 +497,40 @@ export function SmartRailProvider({ children }) {
                 if (error) {
                     console.error('Supabase issueTicket error:', error);
                     // It's still valid locally/on-screen, but failed to sync
+                } else {
+                    // Sync this new passenger into `passenger_details` so the Admin Dashboard gets it
+                    // Also ideally it should be inside `tte_passengers` if we want TTE local reload to show it.
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    await supabase.from('passenger_details').insert({
+                        pnr_number: ticket.pnr,
+                        train_no: ticket.trainNo,
+                        date: todayStr,
+                        coach: ticket.coach,
+                        seat_number: 0, // Hard to assign actual seat without layout logic in frontend, so 0 / unsalotted
+                        berth_type: 'SEAT',
+                        passenger_name: ticket.name,
+                        passenger_age: parseInt(ticket.age, 10),
+                        passenger_gender: ticket.gender,
+                        booking_status: 'CONFIRMED'
+                    });
+
+                    await supabase.from('tte_passengers').insert({
+                        train_id: trainId,
+                        journey_date: todayStr,
+                        pnr: ticket.pnr,
+                        name: ticket.name,
+                        age: parseInt(ticket.age, 10),
+                        gender: ticket.gender,
+                        mobile: ticket.mobile,
+                        coach_id: ticket.coach,
+                        seat_no: 0,
+                        boarding: ticket.from,
+                        destination: ticket.to,
+                        status: 'Confirmed',
+                        id_proof: ticket.idType,
+                        ticket_class: ticket.classKey,
+                        verified: true // Issued by TTE means internally verified
+                    });
                 }
             } catch (err) {
                 console.error('Supabase issueTicket exception:', err);
